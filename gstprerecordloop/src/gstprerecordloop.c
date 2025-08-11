@@ -2,7 +2,7 @@
  * GStreamer
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
- * Copyright (C) 2025  <<user@hostname.org>>
+ * Copyright (C) 2025  <kartik.aiyer@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -56,7 +56,15 @@
  * </refsect2>
  */
 
-#include <cstdlib>
+#include <gst/gstcapsfeatures.h>
+#include <gst/gstclock.h>
+#include <gst/gstelement.h>
+#include <gst/gstevent.h>
+#include <gst/gstinfo.h>
+#include <gst/gstminiobject.h>
+#include <gst/gstpad.h>
+#include <stdlib.h>
+#include <time.h>
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -65,8 +73,9 @@
 
 #include <gstprerecordloop/gstprerecordloop.h>
 
-GST_DEBUG_CATEGORY_STATIC(gst_pre_record_loop_debug);
-#define GST_CAT_DEFAULT gst_pre_record_loop_debug
+GST_DEBUG_CATEGORY_STATIC(prerec_debug);
+#define GST_CAT_DEFAULT prerec_debug
+GST_DEBUG_CATEGORY_STATIC(prerec_dataflow);
 
 /* Filter signals and args */
 enum {
@@ -77,20 +86,83 @@ enum {
 enum { PROP_0, PROP_SILENT };
 
 /* default property values */
-#define DEFAULT_MAX_SIZE_BUFFERS  200   /* 200 buffers */
-#define DEFAULT_MAX_SIZE_BYTES    (300 * 1024 * 1024)    /* 300 MB       */
-#define DEFAULT_MAX_SIZE_TIME     10 * GST_SECOND    /* 10 seconds    */
+#define DEFAULT_MAX_SIZE_BUFFERS 200               /* 200 buffers */
+#define DEFAULT_MAX_SIZE_BYTES (300 * 1024 * 1024) /* 300 MB       */
+#define DEFAULT_MAX_SIZE_TIME 10 * GST_SECOND      /* 10 seconds    */
 
+#define GST_PREREC_MUTEX_LOCK(loop)                                            \
+  G_STMT_START { g_mutex_lock(&loop->lock); }                                  \
+  G_STMT_END
+
+#define GST_PREREC_MUTEX_LOCK_CHECK_F(loop, expr, label)                       \
+  G_STMT_START {                                                               \
+    GST_PREREC_MUTEX_LOCK(loop);                                               \
+    if (!(expr)) {                                                             \
+      goto label;                                                              \
+    }                                                                          \
+  }
+
+#define GST_PREREC_MUTEX_LOCK_CHECK(loop, label)                               \
+  G_STMT_START {                                                               \
+    GST_PREREC_MUTEX_LOCK(loop);                                               \
+    if (loop->srcresult != GST_FLOW_OK)                                        \
+      goto label;                                                              \
+  }                                                                            \
+  G_STMT_END
+
+#define GST_PREREC_MUTEX_UNLOCK(loop)                                          \
+  G_STMT_START { g_mutex_unlock(&loop->lock); }                                \
+  G_STMT_END
+
+#define GST_PREREC_WAIT_DEL_CHECK(loop, label)                                 \
+  G_STMT_START {                                                               \
+    loop->waiting_del = TRUE;                                                  \
+    g_cond_wait(&loop->item_del, &loop->lock);                                 \
+    loop->waiting_del = FALSE;                                                 \
+    if (loop->srcresult != GST_FLOW_OK) {                                      \
+      goto label;                                                              \
+    }                                                                          \
+  }                                                                            \
+  G_STMT_END
+
+#define GST_PREREC_WAIT_ADD_CHECK(loop, label)                                 \
+  G_STMT_START {                                                               \
+    loop->waiting_add = TRUE;                                                  \
+    g_cond_wait(&loop->item_add, &loop->lock);                                 \
+    loop->waiting_add = FALSE;                                                 \
+    if (loop->srcresult != GST_FLOW_OK) {                                      \
+      goto label;                                                              \
+    }                                                                          \
+  }                                                                            \
+  G_STMT_END
+
+#define GST_PREREC_SIGNAL_DEL(loop)                                            \
+  G_STMT_START {                                                               \
+    if (loop->waiting_del) {                                                   \
+      g_cond_signal(&loop->item_del);                                          \
+    }                                                                          \
+  }                                                                            \
+  G_STMT_END
+
+#define GST_PREREC_SIGNAL_ADD(loop)                                            \
+  G_STMT_START {                                                               \
+    if (loop->waiting_add) {                                                   \
+      g_cond_signal(&loop->item_add);                                          \
+    }                                                                          \
+  }                                                                            \
+  G_STMT_END
 
 /* the capabilities of the inputs and outputs.
  *
  * describe the real formats here.
  */
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-    "sink", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS("ANY"));
+static GstStaticPadTemplate sink_factory =
+    GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS("video/x-h264; video/x-h265"));
 
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-    "src", GST_PAD_SRC, GST_PAD_ALWAYS, GST_STATIC_CAPS("ANY"));
+static GstStaticPadTemplate src_factory =
+    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS("video/x-h264; video/x-h265"));
 
 #define gst_pre_record_loop_parent_class parent_class
 G_DEFINE_TYPE(GstPreRecordLoop, gst_pre_record_loop, GST_TYPE_ELEMENT);
@@ -116,33 +188,35 @@ static gboolean gst_pre_record_loop_sink_activate_mode(GstPad *pad,
                                                        GstObject *parent,
                                                        GstPadMode mode,
                                                        gboolean active);
-static gboolean gst_pre_record_loop_sink_query(GstPad *pad,
-                                               GstObject *parent,
+static gboolean gst_pre_record_loop_sink_query(GstPad *pad, GstObject *parent,
                                                GstQuery *query);
-static GstFlowReturn gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
-                                               GstEvent *event);
+static GstFlowReturn
+gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent, GstEvent *event);
 
-static gboolean gst_pre_record_loop_src_event(GstPad *pad,
-                                              GstObject *parent,
+static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
                                               GstEvent *event);
 
-static gboolean gst_pre_record_loop_src_query(GstPad *pad,
-                                              GstObject *parent,
-                                              GstEvent *event);
+static gboolean gst_pre_record_loop_src_query(GstPad *pad, GstObject *parent,
+                                              GstQuery *query);
 
-static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, 
-                                               GstObject *parent,
+static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
                                                GstBuffer *buf);
 
-static GstFlowReturn gst_pre_record_loop_chain_list(GstPad *pad,
-                                                    GstObject *parent,
-                                                    GstBufferList *buffer_list);
+static void gst_pre_record_loop_src_pad_task(GstPad *pad);
 
 typedef struct {
   GstMiniObject *item;
   gsize size;
   gboolean is_query;
+  gboolean is_keyframe;
+  guint gop_id;
 } GstQueueItem;
+
+static inline void clear_level(GstPreRecSize *level) {
+  level->buffers = 0;
+  level->time = 0;
+  level->time = 0;
+}
 
 /** Finalize Function */
 
@@ -153,93 +227,18 @@ static void gst_pre_record_loop_finalize(GObject *object) {
   GST_DEBUG_OBJECT(prerec, "finalize pre rec loop");
 
   while ((qitem = gst_vec_deque_pop_head_struct(prerec->queue))) {
-    if (!qitem->is_query)
-      gst_mini_object_unref(qitem->item);
+    gst_mini_object_unref(qitem->item);
   }
   gst_vec_deque_free(prerec->queue);
 
   g_mutex_clear(&prerec->lock);
   g_cond_clear(&prerec->item_add);
   g_cond_clear(&prerec->item_del);
-  g_cond_clear(&prerec->query_handled);
 
   G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 /* GObject vmethod implementations */
-
-/* initialize the prerecordloop's class */
-static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
-  GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-  GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
-
-  gobject_class->set_property = gst_pre_record_loop_set_property;
-  gobject_class->get_property = gst_pre_record_loop_get_property;
-
-  g_object_class_install_property(
-      gobject_class, PROP_SILENT,
-    g_param_spec_boolean("silent", "Silent", "Produce verbose output ?",
-                         FALSE, G_PARAM_READWRITE));
-  
-  gobject_class->finalize = gst_pre_record_loop_finalize;
-
-  gst_element_class_set_details_simple(
-      gstelement_class, "PreRecordLoop", "Generic",
-      "Capture data in ring buffer and flush onwards on event",
-      "Kartik Aiyer <kartik.aiyer@gmail.com>");
-
-  gst_element_class_add_pad_template(gstelement_class,
-                                     gst_static_pad_template_get(&src_factory));
-  gst_element_class_add_pad_template(
-      gstelement_class, gst_static_pad_template_get(&sink_factory));
-
-  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_finalize);
-  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_sink_activate_mode);
-  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_sink_event);
-  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_sink_query);
-  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_src_activate_mode);
-  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_src_event);
-  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_src_query);
-
-}
-
-/* initialize the new element
- * instantiate pads and add them to element
- * set pad callback functions
- * initialize instance structure
- */
-static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
-
-  filter->sinkpad = gst_pad_new_from_static_template(&sink_factory, "sink");
-  gst_pad_set_event_function_full(filter->sinkpad,
-                             GST_DEBUG_FUNCPTR(gst_pre_record_loop_sink_event));
-  gst_pad_set_chain_function(filter->sinkpad,
-                             GST_DEBUG_FUNCPTR(gst_pre_record_loop_chain));
-  gst_pad_set_chain_list_function(filter->sinkpad, gst_pre_record_loop_chain_list);
-  gst_pad_set_query_function(filter->sinkpad, gst_pre_record_loop_sink_query);
-  gst_pad_set_activatemode_function(filter->sinkpad, gst_pre_record_loop_sink_activate_mode);
-  GST_PAD_SET_PROXY_CAPS(filter->sinkpad);
-  gst_element_add_pad(GST_ELEMENT(filter), filter->sinkpad);
-
-  filter->srcpad = gst_pad_new_from_static_template(&src_factory, "src");
-  gst_pad_set_event_function(filter->srcpad, gst_pre_record_loop_src_event);
-  gst_pad_set_query_function(filter->srcpad, gst_pre_record_loop_src_query);
-  gst_pad_set_activatemode_function(filter->srcpad, gst_pre_record_loop_src_activate_mode);
-  GST_PAD_SET_PROXY_CAPS(filter->srcpad);
-  gst_element_add_pad(GST_ELEMENT(filter), filter->srcpad);
-
-  filter->silent = FALSE;
-  filter->srcresult = GST_FLOW_FLUSHING;
-
-  g_mutex_init(&filter->lock);
-  g_cond_init(&filter->item_add);
-  g_cond_init(&filter->item_del);
-  g_cond_init(&filter->query_handled);
-
-  filter->queue = gst_vec_deque_new_for_struct(sizeof(GstQueueItem),
-                                               DEFAULT_MAX_SIZE_BUFFERS * 3/2);
-  GST_DEBUG_OBJECT(filter, "Initialized PreRecLoop");
-}
 
 static void gst_pre_record_loop_set_property(GObject *object, guint prop_id,
                                              const GValue *value,
@@ -272,49 +271,922 @@ static void gst_pre_record_loop_get_property(GObject *object, guint prop_id,
 
 /* GstElement vmethod implementations */
 
-/* this function handles sink events */
-static GstFlowReturn gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
-                                               GstEvent *event) {
-  GstPreRecordLoop *filter;
-  gboolean ret;
+static gboolean gst_loop_is_filled(GstPreRecordLoop *loop) {
+  return (loop->max_size.time > 0 &&
+          loop->cur_level.time >= loop->max_size.time);
+}
 
-  filter = GST_PRERECORDLOOP(parent);
+static gboolean gst_loop_is_empty(GstPreRecordLoop *loop) {
+  return (loop->cur_level.time == 0 || loop->cur_level.buffers == 0);
+}
 
-  GST_LOG_OBJECT(filter, "Received %s event: %" GST_PTR_FORMAT,
-                 GST_EVENT_TYPE_NAME(event), event);
+/* Convenience function */
+static inline GstClockTimeDiff segment_to_running_time(GstSegment *segment,
+                                                       GstClockTime val) {
+  GstClockTimeDiff res = GST_CLOCK_STIME_NONE;
+
+  if (GST_CLOCK_TIME_IS_VALID(val)) {
+    gboolean sign =
+        gst_segment_to_running_time_full(segment, GST_FORMAT_TIME, val, &val);
+    if (sign > 0)
+      res = val;
+    else if (sign < 0)
+      res = -val;
+  }
+  return res;
+}
+
+static void update_time_level(GstPreRecordLoop *loop) {
+  gint64 sink_time, src_time, sink_start_time;
+
+  if (loop->sink_tainted) {
+    GST_LOG_OBJECT(loop, "update sink time");
+    loop->sinktime = segment_to_running_time(&loop->sink_segment,
+                                             loop->sink_segment.position);
+    loop->sink_tainted = FALSE;
+  }
+  sink_time = loop->sinktime;
+  sink_start_time = loop->sink_start_time;
+
+  if (loop->src_tainted) {
+    GST_LOG_OBJECT(loop, "update src time");
+    loop->srctime =
+        segment_to_running_time(&loop->src_segment, loop->src_segment.position);
+    loop->src_tainted = FALSE;
+  }
+  src_time = loop->srctime;
+
+  GST_LOG_OBJECT(loop,
+                 "sink %" GST_STIME_FORMAT ", src %" GST_STIME_FORMAT
+                 ", sink-start-time %" GST_STIME_FORMAT,
+                 GST_STIME_ARGS(sink_time), GST_STIME_ARGS(src_time),
+                 GST_STIME_ARGS(sink_start_time));
+
+  if (GST_CLOCK_STIME_IS_VALID(sink_time)) {
+    if (!GST_CLOCK_STIME_IS_VALID(src_time) &&
+        GST_CLOCK_STIME_IS_VALID(sink_start_time) &&
+        sink_time >= sink_start_time) {
+      loop->cur_level.time = sink_time - sink_start_time;
+    } else if (GST_CLOCK_STIME_IS_VALID(src_time) && sink_time >= src_time) {
+      loop->cur_level.time = sink_time - src_time;
+    } else {
+      loop->cur_level.time = 0;
+    }
+  } else {
+    loop->cur_level.time = 0;
+  }
+}
+
+/**
+ * locked_apply_segment:
+ * @loop: The GstPreRecordLoop instance
+ * @event: The GstEvent containing segment information
+ * @segment: The GstSegment to update with values from the event
+ * @is_sink: TRUE if this is for the sink pad, FALSE for src pad
+ *
+ * Takes a SEGMENT event and applies the values to the provided segment.
+ * If the segment format is not GST_FORMAT_TIME, it will be converted to
+ * GST_FORMAT_TIME with default values, as time-based tracking is required
+ * for internal buffer management.
+ */
+static void locked_apply_segment(GstPreRecordLoop *loop, GstEvent *event,
+                                 GstSegment *segment, gboolean is_sink) {
+  gst_event_copy_segment(event, segment);
+
+  /* now configure the values, we use these to track timestamps on the
+   * sinkpad. */
+  if (segment->format != GST_FORMAT_TIME) {
+    /* non-time format, pretent the current time segment is closed with a
+     * 0 start and unknown stop time. */
+    segment->format = GST_FORMAT_TIME;
+    segment->start = 0;
+    segment->stop = -1;
+    segment->time = 0;
+  }
+
+  /* Will be updated on buffer flows */
+  if (is_sink) {
+    loop->sink_tainted = FALSE;
+  } else {
+    loop->src_tainted = FALSE;
+  }
+
+  GST_DEBUG_OBJECT(loop, "configured SEGMENT %" GST_SEGMENT_FORMAT, segment);
+}
+
+static void locked_apply_gap(GstPreRecordLoop *loop, GstEvent *event,
+                             GstSegment *segment, gboolean is_sink) {
+  GstClockTime timestamp;
+  GstClockTime duration;
+
+  gst_event_parse_gap(event, &timestamp, &duration);
+
+  g_return_if_fail(GST_CLOCK_TIME_IS_VALID(timestamp));
+
+  if (is_sink && !GST_CLOCK_STIME_IS_VALID(loop->sink_start_time)) {
+    loop->sink_start_time = segment_to_running_time(segment, timestamp);
+    GST_DEBUG_OBJECT(loop, "Start time updated to %" GST_STIME_FORMAT,
+                     GST_STIME_ARGS(loop->sink_start_time));
+  }
+
+  if (GST_CLOCK_TIME_IS_VALID(duration)) {
+    timestamp += duration;
+  }
+
+  segment->position = timestamp;
+
+  if (is_sink)
+    loop->sink_tainted = TRUE;
+  else
+    loop->src_tainted = TRUE;
+
+  /* calc diff with other end */
+  update_time_level(loop);
+}
+
+/** TODO */
+static void locked_apply_buffer(GstPreRecordLoop *loop, GstBuffer *buffer,
+                                GstSegment *segment, gboolean is_sink) {
+  GstClockTime duration = GST_BUFFER_DURATION(buffer);
+  GstClockTime timestamp = GST_BUFFER_DTS_OR_PTS(buffer);
+
+  /* if no timestamp is set, assume it didn't change compared to the previous
+   * buffer and simply return here */
+  if (timestamp == GST_CLOCK_TIME_NONE)
+    return;
+
+  if (is_sink && !GST_CLOCK_STIME_IS_VALID(loop->sink_start_time) &&
+      GST_CLOCK_TIME_IS_VALID(timestamp)) {
+    loop->sink_start_time = segment_to_running_time(segment, timestamp);
+    GST_DEBUG_OBJECT(loop, "Start time updated to $" GST_STIME_FORMAT,
+                     GST_STIME_ARGS(loop->sink_start_time));
+  }
+
+  if (duration != GST_CLOCK_TIME_NONE) {
+    timestamp += duration;
+  }
+
+  GST_LOG_OBJECT(loop, "%s position updated to %" GST_TIME_FORMAT,
+                 is_sink ? "sink" : "src", GST_TIME_ARGS(timestamp));
+
+  segment->position = timestamp;
+  if (is_sink) {
+    loop->sink_tainted = TRUE;
+  } else {
+    loop->src_tainted = TRUE;
+  }
+
+  update_time_level(loop);
+}
+
+typedef struct {
+  GstClockTime first_timestamp;
+  GstClockTime timestamp;
+} BufListData;
+
+static gboolean buffer_list_apply_time(GstBuffer **buf, guint idx,
+                                       gpointer user_data) {
+  BufListData *data = user_data;
+  GstClockTime btime;
+
+  GST_TRACE("buffer %u has pts %" GST_TIME_FORMAT " dts %" GST_TIME_FORMAT
+            " duration %" GST_TIME_FORMAT,
+            idx, GST_TIME_ARGS(GST_BUFFER_DTS(*buf)),
+            GST_TIME_ARGS(GST_BUFFER_PTS(*buf)),
+            GST_TIME_ARGS(GST_BUFFER_DURATION(*buf)));
+
+  btime = GST_BUFFER_DTS_OR_PTS(*buf);
+  if (GST_CLOCK_TIME_IS_VALID(btime)) {
+    if (!GST_CLOCK_TIME_IS_VALID(data->first_timestamp)) {
+      data->first_timestamp = btime;
+    }
+    data->timestamp = btime;
+  }
+  if (GST_BUFFER_DURATION_IS_VALID(*buf) &&
+      GST_CLOCK_TIME_IS_VALID(data->timestamp)) {
+    data->timestamp += GST_BUFFER_DURATION(*buf);
+  }
+  GST_TRACE("ts now %" GST_TIME_FORMAT, GST_TIME_ARGS(data->timestamp));
+  return TRUE;
+}
+
+static void locked_apply_buffer_list(GstPreRecordLoop *loop,
+                                     GstBufferList *buffer_list,
+                                     GstSegment *segment, gboolean is_sink) {
+  BufListData data = {.first_timestamp = GST_CLOCK_TIME_NONE,
+                      .timestamp = GST_CLOCK_TIME_NONE};
+
+  gst_buffer_list_foreach(buffer_list, buffer_list_apply_time, &data);
+
+  if (is_sink && !GST_CLOCK_STIME_IS_VALID(loop->sink_start_time) &&
+      GST_CLOCK_TIME_IS_VALID(data.first_timestamp)) {
+    loop->sink_start_time =
+        segment_to_running_time(segment, data.first_timestamp);
+    GST_DEBUG_OBJECT(loop, "Start time updated to %" GST_STIME_FORMAT,
+                     GST_STIME_ARGS(loop->sink_start_time));
+  }
+
+  GST_DEBUG_OBJECT(loop, "position updated to %" GST_TIME_FORMAT,
+                   GST_TIME_ARGS(data.timestamp));
+
+  segment->position = data.timestamp;
+
+  if (is_sink) {
+    loop->sink_tainted = TRUE;
+  } else {
+    loop->src_tainted = TRUE;
+  }
+  update_time_level(loop);
+}
+
+static GstQueueItem *gst_prerec_locked_dequeue(GstPreRecordLoop *loop) {
+  GstQueueItem *qitem;
+  GstMiniObject *item;
+  gsize buf_size;
+
+  qitem = gst_vec_deque_pop_head_struct(loop->queue);
+  if (qitem == NULL) {
+    GST_CAT_DEBUG_OBJECT(prerec_dataflow, loop, "the prerec loop is empty");
+    return NULL;
+  }
+
+  item = qitem->item;
+  buf_size = qitem->size;
+
+  if (GST_IS_BUFFER(item)) {
+    GstBuffer *buffer = GST_BUFFER_CAST(item);
+
+    GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+                       "retrieved buffer %p from prerec loop", buffer);
+    loop->cur_level.buffers--;
+    loop->cur_level.bytes -= buf_size;
+    locked_apply_buffer(loop, buffer, &loop->src_segment, FALSE);
+
+    if (loop->cur_level.buffers == 0) {
+      loop->cur_level.time = 0;
+    }
+  } else if (GST_IS_EVENT(item)) {
+    GstEvent *event = GST_EVENT_CAST(item);
+
+    switch (GST_EVENT_TYPE(event)) {
+    case GST_EVENT_SEGMENT:
+      if (G_LIKELY(!loop->newseg_applied_to_src)) {
+        gst_pad_store_sticky_event(loop->srcpad, event);
+        locked_apply_segment(loop, event, &loop->src_segment, FALSE);
+      } else {
+        loop->newseg_applied_to_src = FALSE;
+      }
+      break;
+    case GST_EVENT_GAP:
+      locked_apply_gap(loop, event, &loop->src_segment, FALSE);
+      break;
+    default:
+      break;
+    }
+  } else {
+    g_warning(
+        "Unexpected item %p dequeued from queue %s (refcounting problem?)",
+        item, GST_OBJECT_NAME(loop));
+    gst_mini_object_unref(item);
+    memset(qitem, 0, sizeof(GstQueueItem));
+    item = NULL;
+    qitem = NULL;
+  }
+  GST_PREREC_SIGNAL_DEL(loop);
+  return qitem;
+}
+
+static void gst_prerec_locked_flush(GstPreRecordLoop *loop, gboolean full) {
+  GstQueueItem *qitem;
+  while ((qitem = gst_vec_deque_pop_head_struct(loop->queue))) {
+    if (!full && !GST_IS_QUERY(qitem->item) && GST_IS_EVENT(qitem->item) &&
+        GST_EVENT_IS_STICKY(qitem->item) &&
+        GST_EVENT_TYPE(qitem->item) != GST_EVENT_SEGMENT &&
+        GST_EVENT_TYPE(qitem->item) != GST_EVENT_EOS) {
+      gst_pad_store_sticky_event(loop->srcpad, GST_EVENT_CAST(qitem->item));
+    }
+    gst_mini_object_unref(qitem->item);
+    memset(qitem, 0, sizeof(GstQueueItem));
+  }
+  clear_level(&loop->cur_level);
+  gst_segment_init(&loop->sink_segment, GST_FORMAT_TIME);
+  gst_segment_init(&loop->src_segment, GST_FORMAT_TIME);
+  loop->head_needs_discont = loop->tail_needs_discont = FALSE;
+
+  loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
+  loop->sink_start_time = GST_CLOCK_STIME_NONE;
+  loop->sink_tainted = loop->src_tainted = FALSE;
+
+  GST_PREREC_SIGNAL_DEL(loop);
+}
+
+static inline void gst_prerec_locked_enqueue_buffer(GstPreRecordLoop *loop,
+                                                    gpointer item) {
+  GstQueueItem qitem;
+  GstBuffer *buffer = GST_BUFFER_CAST(item);
+  gsize bsize = gst_buffer_get_size(buffer);
+  
+
+
+  qitem.item = item;
+  qitem.is_query = FALSE;
+  qitem.is_keyframe = !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
+  loop->current_gop_id += (qitem.is_keyframe) ? 1 : 0;
+  qitem.gop_id = loop->current_gop_id;
+  qitem.size = bsize;
+  if(gst_vec_deque_get_length(loop->queue) == 0 || loop->cur_level.buffers == 0) {
+    if(!qitem.is_keyframe) {
+      GST_CAT_ERROR_OBJECT(prerec_dataflow, loop,
+                           "Adding first buffer to queue but it is not a keyframe");
+    }
+    loop->last_gop_id = loop->current_gop_id;
+  }
+
+  /* add buffer to the statustics */
+  loop->cur_level.buffers++;
+  loop->cur_level.bytes += bsize;
+  locked_apply_buffer(loop, buffer, &loop->sink_segment, TRUE);
+
+  gst_vec_deque_push_tail_struct(loop->queue, &qitem);
+  GST_PREREC_SIGNAL_ADD(loop);
+}
+
+static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop *loop,
+                                                   gpointer item) {
+  GstQueueItem qitem;
+  GstEvent *event = GST_EVENT_CAST(item);
 
   switch (GST_EVENT_TYPE(event)) {
-  case GST_EVENT_CAPS: {
-    GstCaps *caps;
-
-    gst_event_parse_caps(event, &caps);
-    /* do something with the caps */
-
-    /* and forward */
-    ret = gst_pad_event_default(pad, parent, event);
+  case GST_EVENT_EOS:
+    GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "got EOS from upstream");
+    if (loop->flush_on_eos) {
+      gst_prerec_locked_flush(loop, FALSE);
+    }
+    loop->eos = TRUE;
     break;
-  }
+  case GST_EVENT_SEGMENT:
+    locked_apply_segment(loop, event, &loop->sink_segment, TRUE);
+    /* If the queue is empty, qpply sink segment on the source */
+    if (gst_vec_deque_is_empty(loop->queue)) {
+      GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "Apply segment on srcpad");
+      locked_apply_segment(loop, event, &loop->src_segment, FALSE);
+      loop->newseg_applied_to_src = TRUE;
+    }
+    break;
+  case GST_EVENT_GAP:
+    locked_apply_gap(loop, event, &loop->sink_segment, TRUE);
+    break;
   default:
-    ret = gst_pad_event_default(pad, parent, event);
     break;
   }
-  return ret;
+  qitem.item = item;
+  qitem.is_query = FALSE;
+  qitem.is_keyframe = FALSE;
+  qitem.size = 0;
+  gst_vec_deque_push_tail_struct(loop->queue, &qitem);
+  GST_PREREC_SIGNAL_ADD(loop);
+}
+
+static void drop_last_item(GstPreRecordLoop *loop) {
+  GstQueueItem *qitem = gst_prerec_locked_dequeue(loop);
+  GstMiniObject *item = qitem->item;
+  if (item && GST_IS_EVENT(item)) {
+    GstEvent *event = GST_EVENT_CAST(item);
+    if (event->type != GST_EVENT_SEGMENT) {
+      // unref the events
+      gst_event_unref(event);
+    }
+  } else {
+    gst_buffer_unref(GST_BUFFER_CAST(item));
+  }
+}
+
+static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
+  gboolean done = FALSE;
+  guint id_to_remove = loop->last_gop_id;
+  guint events_dropped = 0;
+  guint buffers_dropped = 0;
+  // Lets get to the starting point
+  gboolean at_first = FALSE;
+  do {
+    GstQueueItem *qitem = gst_vec_deque_peek_head_struct(loop->queue);
+    GstMiniObject *item = qitem->item;
+    if (item) {
+      if (GST_IS_EVENT(item)) {
+        drop_last_item(loop);
+      }
+      if (GST_IS_BUFFER(item)) {
+        GstBuffer *buffer = GST_BUFFER_CAST(item);
+        gboolean remove = FALSE;
+        if (!qitem->is_keyframe) {
+          GST_CAT_ERROR_OBJECT(prerec_dataflow, loop,
+                               "Expecting a key frame but its not gop_id: %d",
+                               qitem->gop_id);
+          remove = TRUE;
+        }
+        if (qitem->gop_id != loop->last_gop_id) {
+          GST_CAT_ERROR_OBJECT(prerec_dataflow, loop,
+                               "Looking for first, but at the end has gop %d "
+                               "not the expected %d",
+                               qitem->gop_id, loop->last_gop_id);
+          // Removing this frame
+          remove = TRUE;
+        }
+        if (remove) {
+          drop_last_item(loop);
+        } else {
+          at_first = TRUE;
+        }
+      }
+    } else {
+      done = TRUE;
+    }
+  }
+  while (!at_first && !done)
+    ;
+
+  if (gst_loop_is_empty(loop)) {
+    GST_CAT_ERROR_OBJECT(prerec_dataflow, loop,
+                         "Couldn't find a starting point and queue is empty");
+    return;
+  }
+  // Okay we have a starting point. Lets examine the top of the queue and see
+  // if its a buffer within the target gop id. Remove it if it is. Remove events
+  // that might also be inbetween
+  do {
+    GstQueueItem *qitem = gst_vec_deque_peek_head_struct(loop->queue);
+    GstMiniObject *item = qitem->item;
+    if (item) {
+      if (GST_IS_EVENT(item)) {
+        drop_last_item(loop);
+      } else {
+        if (qitem->gop_id == loop->last_gop_id) {
+          drop_last_item(loop);
+        } else {
+          if (!qitem->is_keyframe) {
+            GST_CAT_ERROR_OBJECT(
+                prerec_dataflow, loop,
+                "Expecting a key frame on gop ID transition, but not found");
+          }
+          GST_CAT_DEBUG_OBJECT(prerec_dataflow, loop,
+                               "Droppped a Gop");
+          loop->last_gop_id = qitem->gop_id;
+          done = TRUE;
+        }
+      }
+    } else {
+      done = TRUE;
+    }
+  } while (!done);
+}
+
+static GstFlowReturn gst_buffer_or_list_chain(GstPad *pad, GstObject *parent,
+                                              GstMiniObject *obj,
+                                              gboolean is_list) {
+  GstPreRecordLoop *loop = GST_PREREC_CAST(parent);
+
+  GST_PREREC_MUTEX_LOCK_CHECK(loop, out_flushing);
+
+  GstPreRecSize prev_level = loop->cur_level;
+
+  if (loop->eos)
+    goto out_eos;
+  if (loop->unexpected)
+    goto out_eos;
+
+  if (!is_list) {
+    GstClockTime duration, timestamp;
+    GstBuffer *buffer = GST_BUFFER_CAST(obj);
+
+    timestamp = GST_BUFFER_DTS_OR_PTS(buffer);
+    duration = GST_BUFFER_DURATION(buffer);
+    gboolean is_keyframe =
+        !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
+
+    GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+                       "received buffer %p of size %" G_GSIZE_FORMAT
+                       ", time %" GST_TIME_FORMAT
+                       ", duration %" GST_TIME_FORMAT,
+                       buffer, gst_buffer_get_size(buffer),
+                       GST_TIME_ARGS(timestamp), GST_TIME_ARGS(duration));
+  } else {
+    GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+                       "received buffer list %p with %u buffers", obj,
+                       gst_buffer_list_length(GST_BUFFER_LIST_CAST(obj)));
+    /* Make space if full */
+    while (gst_loop_is_filled(loop)) {
+      // Remove a frame from the end of the buffer
+      gst_prerec_locked_drop(loop);
+    }
+  }
+out_unref:
+  GST_PREREC_MUTEX_UNLOCK(loop);
+
+  gst_mini_object_unref(obj);
+
+  return GST_FLOW_OK;
+
+out_flushing:
+  GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+                     "exit beccause task paused, reason: %s",
+                     gst_flow_get_name(loop->srcresult));
+  GST_PREREC_MUTEX_UNLOCK(loop);
+  gst_mini_object_unref(obj);
+  return loop->srcresult;
+
+out_eos:
+  GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "exit because we received EOS");
+  GST_PREREC_MUTEX_UNLOCK(loop);
+  gst_mini_object_unref(obj);
+  return GST_FLOW_EOS;
+}
+
+static void gst_pre_record_loop_src_pad_task(GstPad *pad) {
+  GstPreRecordLoop *loop = GST_PRERECORDLOOP(GST_PAD_PARENT(pad));
+
+  GST_PREREC_MUTEX_LOCK_CHECK(loop, out_flushing);
+  if (loop->mode == GST_PREREC_MODE_PASS_THROUGH) {
+    GstState state;
+    while (gst_loop_is_empty(loop)) {
+      GST_PREREC_WAIT_ADD_CHECK(loop, out_flushing);
+    }
+    state = GST_STATE(loop);
+    if (state == GST_STATE_PLAYING) {
+
+    } else if (state == GST_STATE_PAUSED && loop->preroll_sent == FALSE) {
+      // Send only one pre-roll
+      while (loop->preroll_sent == FALSE) {
+        GstQueueItem *qitem = gst_prerec_locked_dequeue(loop);
+        GstMiniObject *obj = qitem->item;
+        if (GST_IS_EVENT(obj)) {
+          gst_pad_push_event(loop->srcpad, GST_EVENT_CAST(obj));
+        } else if (GST_IS_BUFFER(obj)) {
+          gst_pad_push(loop->srcpad, GST_BUFFER_CAST(obj));
+          loop->preroll_sent = TRUE;
+        }
+      }
+    }
+  }
+  GST_PREREC_MUTEX_UNLOCK(loop);
+  return;
+out_flushing:
+  GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "stopping task due to state: %s",
+                     gst_flow_get_name(loop->srcresult));
+  gst_prerec_locked_flush(loop, FALSE);
+  GST_PREREC_MUTEX_UNLOCK(loop);
+
+  if (loop->eos && (loop->srcresult == GST_FLOW_NOT_LINKED ||
+                    loop->srcresult < GST_FLOW_EOS)) {
+    GST_ELEMENT_FLOW_ERROR(loop, loop->srcresult);
+    gst_pad_push_event(loop->srcpad, gst_event_new_eos());
+  }
 }
 
 /* chain function
  * this function does the actual processing
  */
 static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
-                                               GstBuffer *buf) {
-  GstPreRecordLoop *filter;
+                                               GstBuffer *buffer) {
+  GstPreRecordLoop *loop = GST_PREREC_CAST(parent);
+  GstClockTime duration, timestamp;
 
-  filter = GST_PRERECORDLOOP(parent);
+  GST_PREREC_MUTEX_LOCK_CHECK(loop, out_flushing);
 
-  if (filter->silent == FALSE)
-    g_print("I'm plugged, therefore I'm in.\n");
+  GstPreRecSize prev_level = loop->cur_level;
 
-  /* just push out the incoming buffer without touching it */
-  return gst_pad_push(filter->srcpad, buf);
+  if (loop->eos)
+    goto out_eos;
+  if (loop->unexpected)
+    goto out_eos;
+
+  timestamp = GST_BUFFER_DTS_OR_PTS(buffer);
+  duration = GST_BUFFER_DURATION(buffer);
+  gboolean is_keyframe =
+      !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
+
+  GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+                     "received buffer %p of size %" G_GSIZE_FORMAT
+                     ", time %" GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT,
+                     buffer, gst_buffer_get_size(buffer),
+                     GST_TIME_ARGS(timestamp), GST_TIME_ARGS(duration));
+
+  GstState current_state = GST_STATE(loop);
+  if (current_state == GST_STATE_PAUSED) {
+    if (loop->preroll_sent == FALSE && is_keyframe == TRUE) {
+      // Send the preroll buffer downstream
+      GstFlowReturn ret = gst_pad_push(loop->srcpad, buffer);
+      loop->preroll_sent = TRUE;
+      // Also queue the buffer
+      gst_prerec_locked_enqueue_buffer(loop, buffer);
+      GST_PREREC_MUTEX_UNLOCK(loop);
+      return ret;
+    } else {
+      // Discard the buffer
+      goto out_unref;
+    }
+  } else {
+    // Queue the buffer
+  }
+
+out_unref:
+  GST_PREREC_MUTEX_UNLOCK(loop);
+  gst_buffer_unref(buffer);
+  return GST_FLOW_OK;
+
+out_flushing:
+  GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+                     "exit beccause task paused, reason: %s",
+                     gst_flow_get_name(loop->srcresult));
+  GST_PREREC_MUTEX_UNLOCK(loop);
+  gst_buffer_unref(buffer);
+  return loop->srcresult;
+
+out_eos:
+  GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "exit because we received EOS");
+  GST_PREREC_MUTEX_UNLOCK(loop);
+  gst_buffer_unref(buffer);
+  return GST_FLOW_EOS;
+}
+
+/* this function handles sink events */
+static GstFlowReturn gst_pre_record_loop_sink_event(GstPad *pad,
+                                                    GstObject *parent,
+                                                    GstEvent *event) {
+  GstPreRecordLoop *loop;
+  gboolean ret;
+
+  loop = GST_PRERECORDLOOP(parent);
+
+  GST_LOG_OBJECT(loop, "Received %s event: %" GST_PTR_FORMAT,
+                 GST_EVENT_TYPE_NAME(event), event);
+
+  switch (GST_EVENT_TYPE(event)) {
+  case GST_EVENT_EOS:
+    // EOS will be sent downstream. If we are buffering, we will flush
+    GST_PREREC_MUTEX_LOCK(loop);
+    if (loop->mode == GST_PREREC_MODE_BUFFERING) {
+      gst_prerec_locked_flush(loop, TRUE);
+    }
+    GST_PREREC_MUTEX_UNLOCK(loop);
+    gst_pad_push_event(loop->srcpad, event);
+    break;
+
+  case GST_EVENT_CAPS: {
+    GstCaps *caps;
+
+    gst_event_parse_caps(event, &caps);
+    /* do something with the caps */
+    if (caps && gst_caps_is_fixed(caps)) {
+      const GstStructure *str = gst_caps_get_structure(caps, 0);
+      const gchar *media_type = gst_structure_get_name(str);
+      GST_LOG_OBJECT(loop, "Media Type: %s", media_type);
+    }
+    /* and forward */
+    ret = gst_pad_event_default(pad, parent, event);
+    break;
+  }
+  default:
+    GST_PREREC_MUTEX_LOCK(loop);
+    if (GST_EVENT_IS_SERIALIZED(event)) {
+      // I'm only pushing the SEGMENT and the GAP event on the queue
+      if (event->type == GST_EVENT_SEGMENT || event->type == GST_EVENT_GAP) {
+        gst_prerec_locked_enqueue_event(loop, event);
+      } else {
+        if (GST_EVENT_IS_STICKY(event)) {
+          // Send the sticky event to the array
+          gst_pad_store_sticky_event(loop->srcpad, event);
+        }
+      }
+    }
+    GST_PREREC_MUTEX_UNLOCK(loop);
+    ret = gst_pad_event_default(pad, parent, event);
+    break;
+  }
+  return ret;
+}
+
+static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
+                                              GstEvent *event) {
+  gboolean result = TRUE;
+  GstPreRecordLoop *loop = GST_PRERECORDLOOP(parent);
+
+#ifndef GST_DISABLE_GST_DEBUG
+  GST_CAT_DEBUG_OBJECT(prerec_dataflow, loop, "got event %p (%d)", event,
+                       GST_EVENT_TYPE(event));
+#endif
+
+  switch (GST_EVENT_TYPE(event)) {
+  case GST_EVENT_RECONFIGURE:
+    GST_PREREC_MUTEX_LOCK(loop);
+    if (loop->srcresult == GST_FLOW_NOT_LINKED) {
+      /* when we got not linked, assume downstream is linked again now and we
+       * can try to start pushing again */
+      loop->srcresult = GST_FLOW_OK;
+      gst_pad_start_task(pad, (GstTaskFunction)gst_pre_record_loop_src_pad_task,
+                         pad, NULL);
+    }
+    GST_PREREC_MUTEX_UNLOCK(loop);
+
+    result = gst_pad_push_event(loop->sinkpad, event);
+    break;
+  default:
+    result = gst_pad_event_default(pad, parent, event);
+    break;
+  }
+  return result;
+}
+
+static gboolean gst_pre_record_loop_src_query(GstPad *pad, GstObject *parent,
+                                              GstQuery *query) {
+  return gst_pad_query_default(pad, parent, query);
+}
+
+static gboolean gst_pre_record_loop_src_activate_mode(GstPad *pad,
+                                                      GstObject *parent,
+                                                      GstPadMode mode,
+                                                      gboolean active) {
+  gboolean result = FALSE;
+  GstPreRecordLoop *loop = GST_PRERECORDLOOP(parent);
+
+  switch (mode) {
+  case GST_PAD_MODE_PUSH:
+    if (active) {
+      GST_PREREC_MUTEX_LOCK(loop);
+      loop->srcresult = GST_FLOW_OK;
+      loop->eos = FALSE;
+      result = gst_pad_start_task(
+          pad, (GstTaskFunction)gst_pre_record_loop_src_pad_task, pad, NULL);
+      GST_PREREC_MUTEX_UNLOCK(loop);
+    } else {
+      /* Step 1, unblock loop function */
+      GST_PREREC_MUTEX_LOCK(loop);
+      loop->srcresult = GST_FLOW_FLUSHING;
+      /* The item add signal will unblock the pas task */
+      GST_PREREC_SIGNAL_ADD(loop);
+      GST_PREREC_MUTEX_UNLOCK(loop);
+
+      /* step 2, make sure streaming finishes */
+      result = gst_pad_stop_task(pad);
+
+      GST_PREREC_MUTEX_LOCK(loop);
+      gst_prerec_locked_flush(loop, FALSE);
+      GST_PREREC_MUTEX_UNLOCK(loop);
+    }
+    break;
+  default:
+    result = FALSE;
+    break;
+  }
+  return result;
+}
+
+static gboolean gst_pre_record_loop_sink_activate_mode(GstPad *pad,
+                                                       GstObject *parent,
+                                                       GstPadMode mode,
+                                                       gboolean active) {
+  gboolean result;
+  GstPreRecordLoop *loop = GST_PRERECORDLOOP(parent);
+
+  switch (mode) {
+  case GST_PAD_MODE_PUSH:
+    if (active) {
+      GST_PREREC_MUTEX_LOCK(loop);
+      loop->srcresult = GST_FLOW_OK;
+      loop->eos = FALSE;
+      GST_PREREC_MUTEX_UNLOCK(loop);
+    } else {
+      /* step 1, unblock the chan function */
+      GST_PREREC_MUTEX_LOCK(loop);
+      loop->srcresult = GST_FLOW_FLUSHING;
+      /* Unblock with a signal on the del*/
+      GST_PREREC_SIGNAL_DEL(loop);
+      GST_PREREC_MUTEX_UNLOCK(loop);
+
+      /* step 2, wait until streaming thread stopped and flush queue */
+      GST_PAD_STREAM_LOCK(pad);
+      GST_PREREC_MUTEX_LOCK(loop);
+      gst_prerec_locked_flush(loop, TRUE);
+      GST_PREREC_MUTEX_UNLOCK(loop);
+      GST_PAD_STREAM_UNLOCK(pad);
+    }
+    result = TRUE;
+    break;
+  default:
+    result = FALSE;
+    break;
+  }
+  return result;
+}
+
+static GstStateChangeReturn
+gst_pre_record_loop_change_state(GstElement *element,
+                                 GstStateChange transition) {
+
+  GstStateChangeReturn ret;
+  GstPreRecordLoop *loop = GST_PRERECORDLOOP(element);
+
+  switch (transition) {
+  case GST_STATE_CHANGE_NULL_TO_READY:
+    loop->preroll_sent = FALSE;
+    break;
+  default:
+    break;
+  }
+
+  ret = GST_ELEMENT_CLASS(gst_pre_record_loop_parent_class)
+            ->change_state(element, transition);
+  return ret;
+}
+
+static gboolean gst_pre_record_loop_sink_query(GstPad *pad, GstObject *parent,
+                                               GstQuery *query) {
+  return gst_pad_query_default(pad, parent, query);
+}
+
+/* initialize the prerecordloop's class */
+static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
+  GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+  GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
+  
+  g_print("Class Init");
+  gobject_class->set_property = gst_pre_record_loop_set_property;
+  gobject_class->get_property = gst_pre_record_loop_get_property;
+
+  g_object_class_install_property(
+      gobject_class, PROP_SILENT,
+      g_param_spec_boolean("silent", "Silent", "Produce verbose output ?",
+                           FALSE, G_PARAM_READWRITE));
+
+  gobject_class->finalize = gst_pre_record_loop_finalize;
+
+  gst_element_class_set_details_simple(
+      gstelement_class, "PreRecordLoop", "Generic",
+      "Capture data in ring buffer and flush onwards on event",
+      "Kartik Aiyer <kartik.aiyer@gmail.com>");
+
+  gst_element_class_add_pad_template(gstelement_class,
+                                     gst_static_pad_template_get(&src_factory));
+  gst_element_class_add_pad_template(
+      gstelement_class, gst_static_pad_template_get(&sink_factory));
+
+  gstelement_class->change_state = gst_pre_record_loop_change_state;
+
+  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_finalize);
+  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_sink_activate_mode);
+  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_sink_event);
+  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_sink_query);
+  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_src_activate_mode);
+  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_src_event);
+  GST_DEBUG_REGISTER_FUNCPTR(gst_pre_record_loop_src_query);
+}
+
+/* initialize the new element
+ * instantiate pads and add them to element
+ * set pad callback functions
+ * initialize instance structure
+ */
+static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
+  g_print("Init");
+
+  filter->sinkpad = gst_pad_new_from_static_template(&sink_factory, "sink");
+  gst_pad_set_event_full_function(
+      filter->sinkpad, GST_DEBUG_FUNCPTR(gst_pre_record_loop_sink_event));
+  gst_pad_set_chain_function(filter->sinkpad,
+                             GST_DEBUG_FUNCPTR(gst_pre_record_loop_chain));
+
+  gst_pad_set_query_function(filter->sinkpad, gst_pre_record_loop_sink_query);
+  gst_pad_set_activatemode_function(filter->sinkpad,
+                                    gst_pre_record_loop_sink_activate_mode);
+  GST_PAD_SET_PROXY_CAPS(filter->sinkpad);
+  gst_element_add_pad(GST_ELEMENT(filter), filter->sinkpad);
+
+  filter->srcpad = gst_pad_new_from_static_template(&src_factory, "src");
+  gst_pad_set_event_function(filter->srcpad, gst_pre_record_loop_src_event);
+  gst_pad_set_query_function(filter->srcpad, gst_pre_record_loop_src_query);
+  gst_pad_set_activatemode_function(filter->srcpad,
+                                    gst_pre_record_loop_src_activate_mode);
+  GST_PAD_SET_PROXY_CAPS(filter->srcpad);
+  gst_element_add_pad(GST_ELEMENT(filter), filter->srcpad);
+
+  filter->silent = FALSE;
+  filter->srcresult = GST_FLOW_FLUSHING;
+
+  g_mutex_init(&filter->lock);
+  g_cond_init(&filter->item_add);
+  g_cond_init(&filter->item_del);
+
+  filter->queue = gst_vec_deque_new_for_struct(
+      sizeof(GstQueueItem), DEFAULT_MAX_SIZE_BUFFERS * 3 / 2);
+  GST_DEBUG_OBJECT(filter, "Initialized PreRecLoop");
+  // We will start in the PASSTHROUGH mode so that when we move to the PAUSED
+  // We will pre-roll the downstream elements with one frame.
+  filter->mode = GST_PREREC_MODE_PASS_THROUGH;
+
+  filter->current_gop_id = 0;
+  filter->gop_size = 0;
+  filter->last_gop_id = 0;
+  filter->num_gops = 0;
+  filter->preroll_sent = FALSE;
 }
 
 /* entry point to initialize the plug-in
@@ -326,9 +1198,11 @@ static gboolean prerecordloop_init(GstPlugin *prerecordloop) {
    *
    * exchange the string 'Template prerecordloop' with your description
    */
-  GST_DEBUG_CATEGORY_INIT(gst_pre_record_loop_debug, "prerecordloop", 0,
-                          "Ring buffer pre capture before an event");
-
+  GST_DEBUG_CATEGORY_INIT(prerec_debug, "prerecloop", 0,
+                          "pre capture ring bufffer element");
+  GST_DEBUG_CATEGORY_INIT(prerec_dataflow, "prerecloop_dataflow", 0,
+                          "dataflow inside the prerec loop");
+  g_print("Plugin Init");
   return GST_ELEMENT_REGISTER(pre_record_loop, prerecordloop);
 }
 
@@ -348,4 +1222,4 @@ static gboolean prerecordloop_init(GstPlugin *prerecordloop) {
  */
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, prerecordloop,
                   "Pre Record Loop", prerecordloop_init, "1.19", "MIT",
-                  "Pre Record Loop", "")
+                  "Pre Record Loop", "");

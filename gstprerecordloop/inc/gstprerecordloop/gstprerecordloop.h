@@ -54,6 +54,14 @@ G_BEGIN_DECLS
 #define GST_TYPE_PRERECORDLOOP (gst_pre_record_loop_get_type())
 G_DECLARE_FINAL_TYPE (GstPreRecordLoop, gst_pre_record_loop,
     GST, PRERECORDLOOP, GstElement)
+#define GST_PRERECLOOP(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_PRERECORDLOOP, GstPreRecordLoop))
+#define GST_PRERECLOOP_CLASS(klass)\
+  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_PRERECORDLOOP, GstQueueClass))
+#define GST_IS_QUEUE(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_PRERECORDLOOP))
+#define GST_PREREC_CAST(obj) \
+((GstPreRecordLoop*)(obj))
 
 typedef struct _GstPreRecSize {
   guint buffers;
@@ -61,13 +69,24 @@ typedef struct _GstPreRecSize {
   guint64 time;
 } GstPreRecSize;
 
-struct _GstPreRecordLoop
+typedef enum {
+  GST_PREREC_MODE_PASS_THROUGH,
+  GST_PREREC_MODE_BUFFERING
+}GstPreRecLoopMode;
+
+typedef struct _GstPreRecordLoop
 {
   GstElement element;
 
   GstPad *sinkpad, *srcpad;
   GstSegment sink_segment;
   GstSegment src_segment;
+
+  GstClockTimeDiff sinktime, srctime;
+  GstClockTimeDiff sink_start_time;
+  
+  /* TRUE if either position needs to be recalculated */
+  gboolean sink_tainted, src_tainted;
 
   /* flowreturn when srcpad is paused */
   GstFlowReturn srcresult;
@@ -79,9 +98,6 @@ struct _GstPreRecordLoop
   GCond item_add;
   gboolean waiting_del;
   GCond item_del;
-  GCond query_handled;
-  gboolean last_query;
-  GstQuery* last_handled_query;
 
   /* the queue of data */
   GstVecDeque *queue;
@@ -89,8 +105,22 @@ struct _GstPreRecordLoop
   gboolean silent;
 
   GstPreRecSize cur_level;
+  GstPreRecSize max_size;
+  
+  gboolean newseg_applied_to_src;
 
-};
+  guint current_gop_id;
+  guint last_gop_id;
+  guint gop_size;
+  guint num_gops;
+
+  GstPreRecLoopMode mode;
+  gboolean head_needs_discont;
+  gboolean tail_needs_discont;
+
+  gboolean flush_on_eos;
+  gboolean preroll_sent;
+}GstPreRecordLoop;
 
 G_END_DECLS
 
