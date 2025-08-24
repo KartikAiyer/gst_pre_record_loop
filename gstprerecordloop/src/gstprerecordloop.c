@@ -1222,4 +1222,4 @@ static gboolean prerecordloop_init(GstPlugin *prerecordloop) {
  */
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, prerecordloop,
                   "Pre Record Loop", prerecordloop_init, "1.19", "MIT",
-                  "Pre Record Loop", "");
+                  "Pre Record Loop", "https://github.com/KartikAiyer");
