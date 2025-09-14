@@ -12,6 +12,8 @@ set(GLIB_PKGCONFIG_DIR "/opt/homebrew/Cellar/glib/2.84.3/lib/pkgconfig") # Make 
 
 set(CUMULATIVE_PATH "${GSTREAMER_PKGCONFIG_DIR}:${GLIB_PKGCONFIG_DIR}")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CXX_STANDARD 23)
 
 # Append the GStreamer path to PKG_CONFIG_PATH
@@ -24,6 +26,7 @@ endif()
 
 # Set the PKG_CONFIG_PATH environment variable for the current CMake process
 set(ENV{PKG_CONFIG_PATH} "${NEW_PKG_CONFIG_PATH}")
+message("PKG_CONFIG_PATH is set to: ${NEW_PKG_CONFIG_PATH}")
 
 # Find Package Config
 find_package(PkgConfig REQUIRED)

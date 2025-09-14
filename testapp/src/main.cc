@@ -1,16 +1,43 @@
 #include <gst/gst.h>
 #include <print>
+#include <signal.h>
 
-static GstElement *create_pipeline() {
+// Global pipeline pointer for signal handler
+static GstElement *g_pipeline = nullptr;
+
+// Signal handler for Ctrl-C
+static void sigint_handler(int sig) {
+  g_print("\nReceived interrupt signal. Sending EOS...\n");
+  if (g_pipeline) {
+    gst_element_send_event(g_pipeline, gst_event_new_eos());
+  }
+}
+
+static GstElement *create_pipeline()
+{
   const char *pipeline_desc =
-      "videotestsrc ! "
-      "capsfilter caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
+#ifdef AS_MP4
+      "videotestsrc is-live=true ! "
+      "capsfilter "
+      "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
       "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
       "videoconvert ! "
       "vtenc_h264 ! "
+      "h264parse ! "
+      "mp4mux ! "
+      "filesink location=output.mp4";
+#else
+      "videotestsrc is-live=true ! "
+      "capsfilter "
+      "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
+      "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
+      "videoconvert ! "
+      "vtenc_h264 ! "
+      "h264parse ! "
       "pre_record_loop ! "
       "fakesink";
-  return gst_parse_launch(pipeline_desc, nullptr);
+#endif
+      return gst_parse_launch(pipeline_desc, nullptr);
 }
 
 int main(int argc, char *argv[]) {
@@ -23,8 +50,14 @@ int main(int argc, char *argv[]) {
   gst_init(&argc, &argv);
 
   // OPTIONAL: Add your plugin directory to the search path
-  gst_plugin_load_file("build/Release/gstprerecordloop/libgstprerecordloop.so",
-                       NULL);
+  GError *plugin_error = NULL;
+  if (!gst_plugin_load_file("build/Debug/gstprerecordloop/libgstprerecordloop.so",
+                           &plugin_error)) {
+    g_printerr("Failed to load plugin: %s\n", plugin_error ? plugin_error->message : "Unknown error");
+    if (plugin_error) g_error_free(plugin_error);
+    return -1;
+  }
+  g_print("Plugin loaded successfully\n");
 
   // Create pipeline
   pipeline = create_pipeline();
@@ -32,6 +65,11 @@ int main(int argc, char *argv[]) {
     g_printerr("Failed to create pipeline!\n");
     return -1;
   }
+  g_pipeline = pipeline; // Assign to global variable
+
+  // Register signal handler for Ctrl-C
+  g_print("Registered signal handler for Ctrl-C. Press Ctrl-C to stop recording.\n");
+  signal(SIGINT, sigint_handler);
 
   // Start playing
   gst_element_set_state(pipeline, GST_STATE_PLAYING);

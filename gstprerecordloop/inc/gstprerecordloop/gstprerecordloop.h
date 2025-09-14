@@ -58,7 +58,7 @@ G_DECLARE_FINAL_TYPE (GstPreRecordLoop, gst_pre_record_loop,
   (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_PRERECORDLOOP, GstPreRecordLoop))
 #define GST_PRERECLOOP_CLASS(klass)\
   (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_PRERECORDLOOP, GstQueueClass))
-#define GST_IS_QUEUE(obj) \
+#define GST_IS_PRERECORDLOOP(obj) \
   (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_PRERECORDLOOP))
 #define GST_PREREC_CAST(obj) \
 ((GstPreRecordLoop*)(obj))
