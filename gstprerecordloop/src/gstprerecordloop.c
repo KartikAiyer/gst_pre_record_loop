@@ -201,7 +201,7 @@ static gboolean gst_pre_record_loop_src_query(GstPad *pad, GstObject *parent,
 static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
                                                GstBuffer *buf);
 
-static void gst_pre_record_loop_src_pad_task(GstPad *pad);
+// Removed gst_pre_record_loop_src_pad_task as we're not using it anymore
 
 typedef struct {
   GstMiniObject *item;
@@ -710,9 +710,10 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
                          "Couldn't find a starting point and queue is empty");
     return;
   }
-  GST_CAT_LOG_OBJECT(prerec_debug, loop, 
-                     "Dropped %d events and %d buffers trying to get to start of gop for drop",
-                     events_dropped, buffers_dropped);
+  GST_CAT_LOG_OBJECT(
+      prerec_debug, loop,
+      "Dropped %d events and %d buffers trying to get to start of gop for drop",
+      events_dropped, buffers_dropped);
   // Okay we have a starting point. Lets examine the top of the queue and see
   // if its a buffer within the target gop id. Remove it if it is. Remove events
   // that might also be inbetween
@@ -742,8 +743,7 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
       done = TRUE;
     }
   } while (!done);
-  GST_CAT_LOG_OBJECT(prerec_debug, loop,
-                     "Dropped %d events and %d buffers",
+  GST_CAT_LOG_OBJECT(prerec_debug, loop, "Dropped %d events and %d buffers",
                      events_dropped, buffers_dropped);
 }
 
@@ -808,47 +808,6 @@ out_eos:
   return GST_FLOW_EOS;
 }
 
-static void gst_pre_record_loop_src_pad_task(GstPad *pad) {
-  GstPreRecordLoop *loop = GST_PRERECORDLOOP(GST_PAD_PARENT(pad));
-
-  GST_PREREC_MUTEX_LOCK_CHECK(loop, out_flushing);
-  if (loop->mode == GST_PREREC_MODE_PASS_THROUGH) {
-    GstState state;
-    while (gst_loop_is_empty(loop)) {
-      GST_PREREC_WAIT_ADD_CHECK(loop, out_flushing);
-    }
-    state = GST_STATE(loop);
-    if (state == GST_STATE_PLAYING) {
-
-    } else if (state == GST_STATE_PAUSED && loop->preroll_sent == FALSE) {
-      // Send only one pre-roll
-      while (loop->preroll_sent == FALSE) {
-        GstQueueItem *qitem = gst_prerec_locked_dequeue(loop);
-        GstMiniObject *obj = qitem->item;
-        if (GST_IS_EVENT(obj)) {
-          gst_pad_push_event(loop->srcpad, GST_EVENT_CAST(obj));
-        } else if (GST_IS_BUFFER(obj)) {
-          gst_pad_push(loop->srcpad, GST_BUFFER_CAST(obj));
-          loop->preroll_sent = TRUE;
-        }
-      }
-    }
-  }
-  GST_PREREC_MUTEX_UNLOCK(loop);
-  return;
-out_flushing:
-  GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "stopping task due to state: %s",
-                     gst_flow_get_name(loop->srcresult));
-  gst_prerec_locked_flush(loop, FALSE);
-  GST_PREREC_MUTEX_UNLOCK(loop);
-
-  if (loop->eos && (loop->srcresult == GST_FLOW_NOT_LINKED ||
-                    loop->srcresult < GST_FLOW_EOS)) {
-    GST_ELEMENT_FLOW_ERROR(loop, loop->srcresult);
-    gst_pad_push_event(loop->srcpad, gst_event_new_eos());
-  }
-}
-
 /* chain function
  * this function does the actual processing
  */
@@ -859,7 +818,6 @@ static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
 
   GST_PREREC_MUTEX_LOCK_CHECK(loop, out_flushing);
   GST_CAT_INFO_OBJECT(prerec_debug, loop, "Chain Function");
-  GstPreRecSize prev_level = loop->cur_level;
 
   if (loop->eos) {
     GST_CAT_INFO(prerec_debug, "Going to EOS");
@@ -875,59 +833,57 @@ static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
   gboolean is_keyframe =
       !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
 
-  GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
-                     "received buffer %p of size %" G_GSIZE_FORMAT
-                     ", time %" GST_TIME_FORMAT ", duration %" GST_TIME_FORMAT
-                     ", keyframe=%s",
-                     buffer, gst_buffer_get_size(buffer),
-                     GST_TIME_ARGS(timestamp), GST_TIME_ARGS(duration),
-                     is_keyframe ? "YES" : "NO");
+  GST_CAT_LOG_OBJECT(
+      prerec_dataflow, loop,
+      "received buffer %p of size %" G_GSIZE_FORMAT ", time %" GST_TIME_FORMAT
+      ", duration %" GST_TIME_FORMAT ", keyframe=%s",
+      buffer, gst_buffer_get_size(buffer), GST_TIME_ARGS(timestamp),
+      GST_TIME_ARGS(duration), is_keyframe ? "YES" : "NO");
 
-  GstState current_state = GST_STATE(loop);
-  GST_CAT_INFO(prerec_debug, "Current State: %s", gst_element_state_get_name(current_state));
-  if (current_state == GST_STATE_PAUSED) {
-    if (loop->preroll_sent == FALSE && is_keyframe == TRUE) {
-      // Send the preroll buffer downstream
-      GstFlowReturn ret = gst_pad_push(loop->srcpad, buffer);
-      loop->preroll_sent = TRUE;
-      loop->mode = GST_PREREC_MODE_BUFFERING;
-      GST_CAT_INFO(prerec_debug, "Sending Preroll buffer downstream");
-      // gst_prerec_locked_enqueue_buffer(loop, buffer);
-      GST_PREREC_MUTEX_UNLOCK(loop);
-      return ret;
-    } else {
-      // Discard the buffer
-      GST_CAT_INFO(prerec_debug, "Discarding the Buffer in the Paused state");
-      goto out_unref;
-    }
-  } else {
-    // Queue the buffer
-    GstFlowReturn ret = GST_FLOW_OK;
-    if (loop->mode == GST_PREREC_MODE_BUFFERING) {
-      /* Make space if full */
+  switch (loop->mode) {
+    case GST_PREREC_MODE_PASS_THROUGH:
+      // During preroll, we need to send at least one buffer downstream to complete preroll
+      if (!loop->preroll_sent) {
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Sending preroll buffer downstream");
+        loop->preroll_sent = TRUE;
+        // Switch to buffering mode after preroll
+        loop->mode = GST_PREREC_MODE_BUFFERING;
+        GstFlowReturn ret = gst_pad_push(loop->srcpad, buffer);
+        GST_PREREC_MUTEX_UNLOCK(loop);
+        return ret;
+      } else {
+        // Normal passthrough mode (after custom event)
+        GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "Passthrough mode - forwarding buffer");
+        GstFlowReturn ret = gst_pad_push(loop->srcpad, buffer);
+        GST_PREREC_MUTEX_UNLOCK(loop);
+        return ret;
+      }
+      break;
+
+    case GST_PREREC_MODE_BUFFERING:
+      GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "Buffering mode - storing buffer");
+      
+      // Add buffer to ring buffer
+      gst_prerec_locked_enqueue_buffer(loop, buffer);
+      
+      // Check if buffer is full and drop old frames if needed
       while (gst_loop_is_filled(loop)) {
-        // Remove a frame from the end of the buffer
+        GST_CAT_LOG_OBJECT(prerec_debug, loop, "Buffer full, dropping oldest GOP");
         gst_prerec_locked_drop(loop);
       }
-      GST_CAT_INFO(prerec_debug, "Queueing a buffer");
-      gst_prerec_locked_enqueue_buffer(loop, buffer);
-    } else {
-      // forward
-      GST_CAT_INFO(prerec_debug, "Forwarding a buffer");
-      ret = gst_pad_push(loop->srcpad, buffer);
-    }
-    GST_PREREC_MUTEX_UNLOCK(loop);
-    return ret;
-  }
+      
+      GST_PREREC_MUTEX_UNLOCK(loop);
+      return GST_FLOW_OK;
+      break;
 
-out_unref:
-  GST_PREREC_MUTEX_UNLOCK(loop);
-  gst_buffer_unref(buffer);
-  return GST_FLOW_OK;
+    default:
+      GST_CAT_ERROR_OBJECT(prerec_debug, loop, "Unknown mode: %d", loop->mode);
+      goto out_eos;
+  }
 
 out_flushing:
   GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
-                     "exit beccause task paused, reason: %s",
+                     "exit because task paused, reason: %s",
                      gst_flow_get_name(loop->srcresult));
   GST_PREREC_MUTEX_UNLOCK(loop);
   gst_buffer_unref(buffer);
@@ -976,6 +932,44 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
     ret = gst_pad_event_default(pad, parent, event);
     break;
   }
+  case GST_EVENT_CUSTOM_DOWNSTREAM: {
+    // Check if this is our flush trigger event
+    const GstStructure *structure = gst_event_get_structure(event);
+    if (structure && gst_structure_has_name(structure, "prerecord-flush")) {
+      GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received flush trigger event!");
+      
+      GST_PREREC_MUTEX_LOCK(loop);
+      if (loop->mode == GST_PREREC_MODE_BUFFERING) {
+        // Flush all buffered frames downstream
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Flushing %d buffered frames", 
+                           (int)gst_vec_deque_get_length(loop->queue));
+        
+        GstQueueItem *qitem;
+        while ((qitem = gst_prerec_locked_dequeue(loop))) {
+          if (GST_IS_BUFFER(qitem->item)) {
+            GstBuffer *buf = GST_BUFFER_CAST(qitem->item);
+            gst_pad_push(loop->srcpad, buf);
+          } else if (GST_IS_EVENT(qitem->item)) {
+            GstEvent *ev = GST_EVENT_CAST(qitem->item);
+            gst_pad_push_event(loop->srcpad, ev);
+          }
+          g_free(qitem);
+        }
+        
+        // Switch to passthrough mode
+        loop->mode = GST_PREREC_MODE_PASS_THROUGH;
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Switched to passthrough mode");
+      }
+      GST_PREREC_MUTEX_UNLOCK(loop);
+      
+      // Don't forward the custom event downstream
+      gst_event_unref(event);
+      ret = TRUE;
+    } else {
+      ret = gst_pad_event_default(pad, parent, event);
+    }
+    break;
+  }
   default:
     GST_PREREC_MUTEX_LOCK(loop);
     if (GST_EVENT_IS_SERIALIZED(event)) {
@@ -1015,8 +1009,6 @@ static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
       /* when we got not linked, assume downstream is linked again now and we
        * can try to start pushing again */
       loop->srcresult = GST_FLOW_OK;
-      gst_pad_start_task(pad, (GstTaskFunction)gst_pre_record_loop_src_pad_task,
-                         pad, NULL);
     }
     GST_PREREC_MUTEX_UNLOCK(loop);
 
@@ -1044,26 +1036,19 @@ static gboolean gst_pre_record_loop_src_activate_mode(GstPad *pad,
   switch (mode) {
   case GST_PAD_MODE_PUSH:
     if (active) {
+      GST_CAT_INFO(prerec_debug, "Source pad activated - no task needed for passthrough");
       GST_PREREC_MUTEX_LOCK(loop);
       loop->srcresult = GST_FLOW_OK;
       loop->eos = FALSE;
-      result = gst_pad_start_task(
-          pad, (GstTaskFunction)gst_pre_record_loop_src_pad_task, pad, NULL);
       GST_PREREC_MUTEX_UNLOCK(loop);
+      result = TRUE;
     } else {
-      /* Step 1, unblock loop function */
+      GST_CAT_INFO(prerec_debug, "Source pad deactivated");
       GST_PREREC_MUTEX_LOCK(loop);
       loop->srcresult = GST_FLOW_FLUSHING;
-      /* The item add signal will unblock the pas task */
-      GST_PREREC_SIGNAL_ADD(loop);
-      GST_PREREC_MUTEX_UNLOCK(loop);
-
-      /* step 2, make sure streaming finishes */
-      result = gst_pad_stop_task(pad);
-
-      GST_PREREC_MUTEX_LOCK(loop);
       gst_prerec_locked_flush(loop, FALSE);
       GST_PREREC_MUTEX_UNLOCK(loop);
+      result = TRUE;
     }
     break;
   default:
@@ -1242,6 +1227,22 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
 
   filter->queue = gst_vec_deque_new_for_struct(
       sizeof(GstQueueItem), DEFAULT_MAX_SIZE_BUFFERS * 3 / 2);
+  
+  // Initialize buffer size limits
+  filter->max_size.buffers = DEFAULT_MAX_SIZE_BUFFERS;
+  filter->max_size.bytes = DEFAULT_MAX_SIZE_BYTES;
+  filter->max_size.time = DEFAULT_MAX_SIZE_TIME;
+  clear_level(&filter->cur_level);
+  
+  // Initialize segments
+  gst_segment_init(&filter->sink_segment, GST_FORMAT_TIME);
+  gst_segment_init(&filter->src_segment, GST_FORMAT_TIME);
+  
+  // Initialize timing
+  filter->sinktime = filter->srctime = GST_CLOCK_STIME_NONE;
+  filter->sink_start_time = GST_CLOCK_STIME_NONE;
+  filter->sink_tainted = filter->src_tainted = FALSE;
+  
   GST_DEBUG_OBJECT(filter, "Initialized PreRecLoop");
   // We will start in the PASSTHROUGH mode so that when we move to the PAUSED
   // We will pre-roll the downstream elements with one frame.

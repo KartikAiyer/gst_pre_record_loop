@@ -27,7 +27,7 @@ static GstElement *create_pipeline()
       "mp4mux ! "
       "filesink location=output.mp4";
 #else
-      "videotestsrc is-live=true ! "
+      "videotestsrc is-live=true num-buffers=30 ! "
       "capsfilter "
       "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
       "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
