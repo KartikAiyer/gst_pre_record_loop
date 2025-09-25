@@ -4,6 +4,7 @@ add_executable(prerec "${sources}")
 
 # Link with GStreamer
 target_link_libraries(prerec PRIVATE PkgConfig::gstreamer uvw::uvw spdlog::spdlog)
+target_compile_features(prerec PRIVATE cxx_std_20)
 target_include_directories(prerec PRIVATE inc)
 
 # Set macOS bundle properties if on macOS

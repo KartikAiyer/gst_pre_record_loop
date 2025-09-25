@@ -27,7 +27,7 @@ static GstElement *create_pipeline()
       "mp4mux ! "
       "filesink location=output.mp4";
 #else
-      "videotestsrc is-live=true num-buffers=30 ! "
+      "videotestsrc is-live=true num-buffers=420 ! "
       "capsfilter "
       "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
       "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 
   // OPTIONAL: Add your plugin directory to the search path
   GError *plugin_error = NULL;
-  if (!gst_plugin_load_file("build/Debug/gstprerecordloop/libgstprerecordloop.so",
+  if (!gst_plugin_load_file("/Users/kartikaiyer/fun/gst_my_filter/build/Debug/gstprerecordloop/libgstprerecordloop.so",
                            &plugin_error)) {
     g_printerr("Failed to load plugin: %s\n", plugin_error ? plugin_error->message : "Unknown error");
     if (plugin_error) g_error_free(plugin_error);

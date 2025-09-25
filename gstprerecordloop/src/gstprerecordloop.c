@@ -417,7 +417,7 @@ static void locked_apply_buffer(GstPreRecordLoop *loop, GstBuffer *buffer,
   if (is_sink && !GST_CLOCK_STIME_IS_VALID(loop->sink_start_time) &&
       GST_CLOCK_TIME_IS_VALID(timestamp)) {
     loop->sink_start_time = segment_to_running_time(segment, timestamp);
-    GST_DEBUG_OBJECT(loop, "Start time updated to $" GST_STIME_FORMAT,
+    GST_DEBUG_OBJECT(loop, "Start time updated to %" GST_STIME_FORMAT,
                      GST_STIME_ARGS(loop->sink_start_time));
   }
 
@@ -670,8 +670,8 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
   GST_CAT_INFO(prerec_debug, "Will Attempt to drop items");
   do {
     GstQueueItem *qitem = gst_vec_deque_peek_head_struct(loop->queue);
-    GstMiniObject *item = qitem->item;
-    if (item) {
+    if (qitem && qitem->item) {
+      GstMiniObject *item = qitem->item;
       if (GST_IS_EVENT(item)) {
         drop_last_item(loop);
         events_dropped++;
