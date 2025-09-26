@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.27)
 project(prerec C CXX)
 
+# Option: BUILD_GTK_DOC (Phase 3.1 T007) - disabled by default
+option(BUILD_GTK_DOC "Build gtk-doc API reference (requires gtk-doc tools)" OFF)
+
 # Get the existing PKG_CONFIG_PATH environment variable
 # If it's not set, it will be an empty string
 set(CURRENT_PKG_CONFIG_PATH "$ENV{PKG_CONFIG_PATH}")
@@ -39,3 +42,19 @@ find_package(catch2 REQUIRED)
 
 add_subdirectory(gstprerecordloop)
 add_subdirectory(testapp)
+
+if(BUILD_GTK_DOC)
+  message(STATUS "gtk-doc build enabled (stub) - no targets yet")
+  # Placeholder for future gtk-doc integration
+endif()
+
+# Tests root
+enable_testing()
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GST_CHECK REQUIRED IMPORTED_TARGET gstreamer-check-1.0)
+
+# Unit test skeleton (placeholder, real sources to be added later)
+add_executable(unit_tests tests/unit/test_placeholder.c)
+set_target_properties(unit_tests PROPERTIES C_STANDARD 11)
+target_link_libraries(unit_tests PRIVATE PkgConfig::gstreamer PkgConfig::GST_CHECK)
+add_test(NAME prerec_unit_placeholder COMMAND unit_tests)

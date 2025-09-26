@@ -1,0 +1,5 @@
+Checks: '-*,clang-analyzer-*,-clang-analyzer-osx*,bugprone-*,performance-*,readability-identifier-naming,readability-misleading-indentation,modernize-*,-modernize-use-trailing-return-type,-modernize-use-auto'
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(gstprerecordloop|tests)'
+AnalyzeTemporaryDtors: false
+FormatStyle: none

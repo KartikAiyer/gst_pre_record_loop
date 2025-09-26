@@ -100,5 +100,5 @@ build/Debug/testapp/prerec.app/Contents/MacOS/prerec
 If you want to get Gstreamer logging with the prerecloop module logging at high granularity run this instead
 
 ```sh
-GST_DEBUG=*:4,prerecloop:7,prerecloop_dataflow=7 build/Debug/testapp/prerec.app/Contents/MacOS/prerec
+GST_DEBUG=*:4,pre_record_loop:7,pre_record_loop_dataflow=7 build/Debug/testapp/prerec.app/Contents/MacOS/prerec
 ```

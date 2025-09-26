@@ -438,65 +438,6 @@ static void locked_apply_buffer(GstPreRecordLoop *loop, GstBuffer *buffer,
   update_time_level(loop);
 }
 
-typedef struct {
-  GstClockTime first_timestamp;
-  GstClockTime timestamp;
-} BufListData;
-
-static gboolean buffer_list_apply_time(GstBuffer **buf, guint idx,
-                                       gpointer user_data) {
-  BufListData *data = user_data;
-  GstClockTime btime;
-
-  GST_TRACE("buffer %u has pts %" GST_TIME_FORMAT " dts %" GST_TIME_FORMAT
-            " duration %" GST_TIME_FORMAT,
-            idx, GST_TIME_ARGS(GST_BUFFER_DTS(*buf)),
-            GST_TIME_ARGS(GST_BUFFER_PTS(*buf)),
-            GST_TIME_ARGS(GST_BUFFER_DURATION(*buf)));
-
-  btime = GST_BUFFER_DTS_OR_PTS(*buf);
-  if (GST_CLOCK_TIME_IS_VALID(btime)) {
-    if (!GST_CLOCK_TIME_IS_VALID(data->first_timestamp)) {
-      data->first_timestamp = btime;
-    }
-    data->timestamp = btime;
-  }
-  if (GST_BUFFER_DURATION_IS_VALID(*buf) &&
-      GST_CLOCK_TIME_IS_VALID(data->timestamp)) {
-    data->timestamp += GST_BUFFER_DURATION(*buf);
-  }
-  GST_TRACE("ts now %" GST_TIME_FORMAT, GST_TIME_ARGS(data->timestamp));
-  return TRUE;
-}
-
-static void locked_apply_buffer_list(GstPreRecordLoop *loop,
-                                     GstBufferList *buffer_list,
-                                     GstSegment *segment, gboolean is_sink) {
-  BufListData data = {.first_timestamp = GST_CLOCK_TIME_NONE,
-                      .timestamp = GST_CLOCK_TIME_NONE};
-
-  gst_buffer_list_foreach(buffer_list, buffer_list_apply_time, &data);
-
-  if (is_sink && !GST_CLOCK_STIME_IS_VALID(loop->sink_start_time) &&
-      GST_CLOCK_TIME_IS_VALID(data.first_timestamp)) {
-    loop->sink_start_time =
-        segment_to_running_time(segment, data.first_timestamp);
-    GST_DEBUG_OBJECT(loop, "Start time updated to %" GST_STIME_FORMAT,
-                     GST_STIME_ARGS(loop->sink_start_time));
-  }
-
-  GST_DEBUG_OBJECT(loop, "position updated to %" GST_TIME_FORMAT,
-                   GST_TIME_ARGS(data.timestamp));
-
-  segment->position = data.timestamp;
-
-  if (is_sink) {
-    loop->sink_tainted = TRUE;
-  } else {
-    loop->src_tainted = TRUE;
-  }
-  update_time_level(loop);
-}
 
 static GstQueueItem *gst_prerec_locked_dequeue(GstPreRecordLoop *loop) {
   GstQueueItem *qitem;
@@ -747,66 +688,6 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
                      events_dropped, buffers_dropped);
 }
 
-static GstFlowReturn gst_buffer_or_list_chain(GstPad *pad, GstObject *parent,
-                                              GstMiniObject *obj,
-                                              gboolean is_list) {
-  GstPreRecordLoop *loop = GST_PREREC_CAST(parent);
-
-  GST_PREREC_MUTEX_LOCK_CHECK(loop, out_flushing);
-
-  GstPreRecSize prev_level = loop->cur_level;
-
-  if (loop->eos)
-    goto out_eos;
-  if (loop->unexpected)
-    goto out_eos;
-
-  if (!is_list) {
-    GstClockTime duration, timestamp;
-    GstBuffer *buffer = GST_BUFFER_CAST(obj);
-
-    timestamp = GST_BUFFER_DTS_OR_PTS(buffer);
-    duration = GST_BUFFER_DURATION(buffer);
-    gboolean is_keyframe =
-        !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
-
-    GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
-                       "received buffer %p of size %" G_GSIZE_FORMAT
-                       ", time %" GST_TIME_FORMAT
-                       ", duration %" GST_TIME_FORMAT,
-                       buffer, gst_buffer_get_size(buffer),
-                       GST_TIME_ARGS(timestamp), GST_TIME_ARGS(duration));
-  } else {
-    GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
-                       "received buffer list %p with %u buffers", obj,
-                       gst_buffer_list_length(GST_BUFFER_LIST_CAST(obj)));
-    /* Make space if full */
-    while (gst_loop_is_filled(loop)) {
-      // Remove a frame from the end of the buffer
-      gst_prerec_locked_drop(loop);
-    }
-  }
-out_unref:
-  GST_PREREC_MUTEX_UNLOCK(loop);
-
-  gst_mini_object_unref(obj);
-
-  return GST_FLOW_OK;
-
-out_flushing:
-  GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
-                     "exit beccause task paused, reason: %s",
-                     gst_flow_get_name(loop->srcresult));
-  GST_PREREC_MUTEX_UNLOCK(loop);
-  gst_mini_object_unref(obj);
-  return loop->srcresult;
-
-out_eos:
-  GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "exit because we received EOS");
-  GST_PREREC_MUTEX_UNLOCK(loop);
-  gst_mini_object_unref(obj);
-  return GST_FLOW_EOS;
-}
 
 /* chain function
  * this function does the actual processing
@@ -1264,10 +1145,11 @@ static gboolean prerecordloop_init(GstPlugin *prerecordloop) {
    *
    * exchange the string 'Template prerecordloop' with your description
    */
-  GST_DEBUG_CATEGORY_INIT(prerec_debug, "prerecloop",
+  /* Renamed categories to match tasks/spec naming (T003) */
+  GST_DEBUG_CATEGORY_INIT(prerec_debug, "pre_record_loop",
                           GST_DEBUG_FG_YELLOW | GST_DEBUG_BOLD,
                           "pre capture ring bufffer element");
-  GST_DEBUG_CATEGORY_INIT(prerec_dataflow, "prerecloop_dataflow",
+  GST_DEBUG_CATEGORY_INIT(prerec_dataflow, "pre_record_loop_dataflow",
                           GST_DEBUG_FG_CYAN | GST_DEBUG_BOLD,
                           "dataflow inside the prerec loop");
   g_print("Plugin Init\n");
