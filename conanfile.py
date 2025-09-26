@@ -9,6 +9,7 @@ class CampiConan(ConanFile):
     def requirements(self):
         self.requires("spdlog/1.9.2")
         self.requires("uvw/3.4.0")
+        self.requires("catch2/3.10.0")
 
     def layout(self):
         cmake_layout(self)

@@ -213,7 +213,7 @@ typedef struct {
 
 static inline void clear_level(GstPreRecSize *level) {
   level->buffers = 0;
-  level->time = 0;
+  level->bytes = 0;
   level->time = 0;
 }
 
