@@ -65,11 +65,22 @@ fail:
 
 void prerec_pipeline_shutdown(PrerecTestPipeline *p) {
   if (!p) return;
-  if (p->pipeline) gst_element_set_state(p->pipeline, GST_STATE_NULL);
-  if (p->pipeline) gst_object_unref(p->pipeline);
-  if (p->appsrc) gst_object_unref(p->appsrc);
-  if (p->pr) gst_object_unref(p->pr);
-  if (p->fakesink) gst_object_unref(p->fakesink);
+  /* Setting pipeline to NULL will also set all children to NULL. The pipeline
+   * owns (has references to) its children added via gst_bin_add_many(). When we
+   * unref the pipeline, it will drop its references to children which will
+   * finalize them if no external refs exist. Manually unref'ing children here
+   * after unref'ing the pipeline risks double-unref and segfault. Only unref
+   * children individually if the pipeline creation failed before adding them.
+   */
+  if (p->pipeline) {
+    gst_element_set_state(p->pipeline, GST_STATE_NULL);
+    gst_object_unref(p->pipeline);
+  } else {
+    /* Partial init path: free any orphaned elements */
+    if (p->appsrc) gst_object_unref(p->appsrc);
+    if (p->pr) gst_object_unref(p->pr);
+    if (p->fakesink) gst_object_unref(p->fakesink);
+  }
   memset(p, 0, sizeof(*p));
 }
 
