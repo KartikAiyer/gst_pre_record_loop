@@ -20,6 +20,32 @@ GstElement *prerec_create_element(void);
 /* Helper to assemble a simple pipeline string and parse it. (No run) */
 GstElement *prerec_build_pipeline(const char *launch, GError **err);
 
+/* Structured pipeline helper for prerecord tests */
+typedef struct {
+	GstElement *pipeline;
+	GstElement *appsrc;
+	GstElement *pr;       /* pre_record_loop element */
+	GstElement *fakesink;
+} PrerecTestPipeline;
+
+/* Create standard pipeline: appsrc(name=src,is-live,format=time,caps=h264) ! pre_record_loop ! fakesink(sync=FALSE)
+ * Returns TRUE on success; on failure all partially created elements are unref'd and struct zeroed.
+ */
+gboolean prerec_pipeline_create(PrerecTestPipeline *out, const char *name_prefix);
+
+/* Transition pipeline to NULL and unref all members; safe on partially initialized struct */
+void prerec_pipeline_shutdown(PrerecTestPipeline *p);
+
+/* Push a synthetic GOP: one keyframe + (delta_count) delta frames.
+ * pts_base_ns is starting PTS for keyframe; each frame gets duration_ns and
+ * monotonically increasing PTS = previous PTS + duration.
+ * Returns TRUE on success; FALSE if any push fails (remaining buffers skipped).
+ * out_last_pts (optional) receives PTS of last pushed frame.
+ */
+gboolean prerec_push_gop(GstElement *appsrc, guint delta_count,
+						 guint64 *pts_base_ns, guint64 duration_ns,
+						 guint64 *out_last_pts);
+
 
 /* (Optional) Attach a probe to element src pad to count buffers emitted. */
 gulong prerec_attach_count_probe(GstElement *el, guint64 *counter_out);

@@ -82,7 +82,7 @@ enum {
   LAST_SIGNAL
 };
 
-enum { PROP_0, PROP_SILENT };
+enum { PROP_0, PROP_SILENT, PROP_FLUSH_ON_EOS, PROP_FLUSH_TRIGGER_NAME };
 
 /* default property values */
 #define DEFAULT_MAX_SIZE_BUFFERS 200               /* 200 buffers */
@@ -233,6 +233,7 @@ static void gst_pre_record_loop_finalize(GObject *object) {
   g_mutex_clear(&prerec->lock);
   g_cond_clear(&prerec->item_add);
   g_cond_clear(&prerec->item_del);
+  g_free(prerec->flush_trigger_name);
 
   G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -248,6 +249,15 @@ static void gst_pre_record_loop_set_property(GObject *object, guint prop_id,
   case PROP_SILENT:
     filter->silent = g_value_get_boolean(value);
     break;
+  case PROP_FLUSH_ON_EOS:
+    filter->flush_on_eos = g_value_get_boolean(value);
+    break;
+  case PROP_FLUSH_TRIGGER_NAME: {
+    const gchar *s = g_value_get_string(value);
+    g_free(filter->flush_trigger_name);
+    filter->flush_trigger_name = s ? g_strdup(s) : NULL;
+    break;
+  }
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;
@@ -261,6 +271,12 @@ static void gst_pre_record_loop_get_property(GObject *object, guint prop_id,
   switch (prop_id) {
   case PROP_SILENT:
     g_value_set_boolean(value, filter->silent);
+    break;
+  case PROP_FLUSH_ON_EOS:
+    g_value_set_boolean(value, filter->flush_on_eos);
+    break;
+  case PROP_FLUSH_TRIGGER_NAME:
+    g_value_set_string(value, filter->flush_trigger_name);
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -802,10 +818,21 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
 
   switch (GST_EVENT_TYPE(event)) {
   case GST_EVENT_EOS:
-    // EOS will be sent downstream. If we are buffering, we will flush
     GST_PREREC_MUTEX_LOCK(loop);
     if (loop->mode == GST_PREREC_MODE_BUFFERING) {
-      gst_prerec_locked_flush(loop, TRUE);
+      if (loop->flush_on_eos) {
+        GstQueueItem *qitem;
+        while ((qitem = gst_prerec_locked_dequeue(loop))) {
+          if (GST_IS_BUFFER(qitem->item)) {
+            gst_pad_push(loop->srcpad, GST_BUFFER_CAST(qitem->item));
+          } else if (GST_IS_EVENT(qitem->item)) {
+            gst_pad_push_event(loop->srcpad, GST_EVENT_CAST(qitem->item));
+          }
+          g_free(qitem);
+        }
+      } else {
+        gst_prerec_locked_flush(loop, TRUE);
+      }
     }
     GST_PREREC_MUTEX_UNLOCK(loop);
     gst_pad_push_event(loop->srcpad, event);
@@ -827,36 +854,25 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
     break;
   }
   case GST_EVENT_CUSTOM_DOWNSTREAM: {
-    // Check if this is our flush trigger event
     const GstStructure *structure = gst_event_get_structure(event);
-    if (structure && gst_structure_has_name(structure, "prerecord-flush")) {
-      GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received flush trigger event!");
-      
+    const gchar *expected = loop->flush_trigger_name ? loop->flush_trigger_name : "prerecord-flush";
+    if (structure && gst_structure_has_name(structure, expected)) {
+      GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received flush trigger '%s'", expected);
       GST_PREREC_MUTEX_LOCK(loop);
       if (loop->mode == GST_PREREC_MODE_BUFFERING) {
-        // Flush all buffered frames downstream
-        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Flushing %d buffered frames", 
-                           (int)gst_vec_deque_get_length(loop->queue));
-        
         GstQueueItem *qitem;
         while ((qitem = gst_prerec_locked_dequeue(loop))) {
           if (GST_IS_BUFFER(qitem->item)) {
-            GstBuffer *buf = GST_BUFFER_CAST(qitem->item);
-            gst_pad_push(loop->srcpad, buf);
+            gst_pad_push(loop->srcpad, GST_BUFFER_CAST(qitem->item));
           } else if (GST_IS_EVENT(qitem->item)) {
-            GstEvent *ev = GST_EVENT_CAST(qitem->item);
-            gst_pad_push_event(loop->srcpad, ev);
+            gst_pad_push_event(loop->srcpad, GST_EVENT_CAST(qitem->item));
           }
           g_free(qitem);
         }
-        
-        // Switch to passthrough mode
         loop->mode = GST_PREREC_MODE_PASS_THROUGH;
-        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Switched to passthrough mode");
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Switched to passthrough mode after trigger");
       }
       GST_PREREC_MUTEX_UNLOCK(loop);
-      
-      // Don't forward the custom event downstream
       gst_event_unref(event);
       ret = TRUE;
     } else {
@@ -1067,6 +1083,18 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
 
   gobject_class->finalize = gst_pre_record_loop_finalize;
 
+  g_object_class_install_property(
+      gobject_class, PROP_FLUSH_ON_EOS,
+      g_param_spec_boolean("flush-on-eos", "Flush On EOS",
+                           "If TRUE, queued buffers are pushed downstream before EOS is forwarded",
+                           FALSE, G_PARAM_READWRITE));
+
+  g_object_class_install_property(
+      gobject_class, PROP_FLUSH_TRIGGER_NAME,
+      g_param_spec_string("flush-trigger-name", "Flush Trigger Name",
+                          "Custom downstream custom-event structure name that triggers flush (default: prerecord-flush)",
+                          NULL, G_PARAM_READWRITE));
+
   gst_element_class_set_details_simple(
       gstelement_class, "PreRecordLoop", "Generic",
       "Capture data in ring buffer and flush onwards on event",
@@ -1149,6 +1177,8 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
   filter->preroll_sent = FALSE;
   /* init stats */
   memset(&filter->stats, 0, sizeof(filter->stats));
+  filter->flush_on_eos = FALSE;
+  filter->flush_trigger_name = NULL;
 }
 
 void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats) {
