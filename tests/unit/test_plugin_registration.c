@@ -1,6 +1,7 @@
 #include <gst/gst.h>
 #include <stdio.h>
 #include <string.h>
+#include "test_utils.h"
 
 /* T009: Plugin registration test
  * Validates that the prerecord loop element factory is discoverable
@@ -13,30 +14,14 @@ static int fail(const char *msg) {
 }
 
 int main(int argc, char *argv[]) {
-  gst_init(&argc, &argv);
+  prerec_test_init(&argc, &argv);
 
-  const char *candidates[] = {"pre_record_loop", "prerecloop", NULL};
-  gboolean found = FALSE;
-  for (int i = 0; candidates[i]; ++i) {
-    GstElementFactory *factory = gst_element_factory_find(candidates[i]);
-    if (factory) {
-      g_print("T009: Found factory '%s'\n", candidates[i]);
-      found = TRUE;
-      gst_object_unref(factory);
-      break;
-    }
-  }
-
-  if (!found) {
+  if (!prerec_factory_available()) {
     return fail("Could not locate plugin factory (expected one of pre_record_loop/prerecloop). Ensure GST_PLUGIN_PATH includes build dir.");
   }
 
-  /* Basic sanity: create the element */
-  GstElement *el = gst_element_factory_make("pre_record_loop", NULL);
-  if (!el) {
-    // fallback attempt
-    el = gst_element_factory_make("prerecloop", NULL);
-  }
+  /* Basic sanity: create the element via helper */
+  GstElement *el = prerec_create_element();
   if (!el) {
     return fail("Factory exists but element instantiation failed");
   }

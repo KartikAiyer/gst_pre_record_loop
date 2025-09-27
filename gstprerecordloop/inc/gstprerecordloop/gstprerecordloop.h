@@ -74,6 +74,15 @@ typedef enum {
   GST_PREREC_MODE_BUFFERING
 }GstPreRecLoopMode;
 
+/* Future statistics hook (T021/T026): lightweight counters exposed for tests */
+typedef struct _GstPreRecStats {
+  guint drops_gops;       /* number of whole GOP pruning operations */
+  guint drops_buffers;    /* number of individual buffers dropped inside GOP pruning */
+  guint drops_events;     /* number of (non-sticky) events discarded during pruning */
+  guint queued_gops_cur;  /* current GOPs resident (rough heuristic until full impl) */
+  guint queued_buffers_cur; /* current buffer count (mirror of cur_level.buffers) */
+} GstPreRecStats;
+
 typedef struct _GstPreRecordLoop
 {
   GstElement element;
@@ -120,7 +129,13 @@ typedef struct _GstPreRecordLoop
 
   gboolean flush_on_eos;
   gboolean preroll_sent;
+
+  /* stats (incremented under lock; read-only snapshot via helper) */
+  GstPreRecStats stats;
 }GstPreRecordLoop;
+
+/* Accessor to snapshot current stats (thread-safe copy) */
+void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats);
 
 G_END_DECLS
 

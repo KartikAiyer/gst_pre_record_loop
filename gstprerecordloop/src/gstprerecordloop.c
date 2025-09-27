@@ -660,6 +660,10 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
   // that might also be inbetween
   do {
     GstQueueItem *qitem = gst_vec_deque_peek_head_struct(loop->queue);
+    if (!qitem) {
+      done = TRUE;
+      break;
+    }
     GstMiniObject *item = qitem->item;
     if (item) {
       if (GST_IS_EVENT(item)) {
@@ -686,6 +690,15 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
   } while (!done);
   GST_CAT_LOG_OBJECT(prerec_debug, loop, "Dropped %d events and %d buffers",
                      events_dropped, buffers_dropped);
+
+  /* Update stats (under lock already) */
+  loop->stats.drops_events += events_dropped;
+  loop->stats.drops_buffers += buffers_dropped;
+  loop->stats.drops_gops += 1; /* we attempted a GOP level pruning */
+  /* Approximate queued GOPs: difference between current and last id */
+  loop->stats.queued_buffers_cur = loop->cur_level.buffers;
+  if (loop->current_gop_id >= loop->last_gop_id)
+    loop->stats.queued_gops_cur = loop->current_gop_id - loop->last_gop_id + 1;
 }
 
 
@@ -1134,6 +1147,16 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
   filter->last_gop_id = 0;
   filter->num_gops = 0;
   filter->preroll_sent = FALSE;
+  /* init stats */
+  memset(&filter->stats, 0, sizeof(filter->stats));
+}
+
+void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats) {
+  g_return_if_fail(loop != NULL);
+  g_return_if_fail(out_stats != NULL);
+  GST_PREREC_MUTEX_LOCK(loop);
+  *out_stats = loop->stats; /* shallow copy */
+  GST_PREREC_MUTEX_UNLOCK(loop);
 }
 
 /* entry point to initialize the plug-in
