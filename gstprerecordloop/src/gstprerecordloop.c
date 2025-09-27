@@ -1084,7 +1084,6 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
 
-  g_print("Class Init");
   gobject_class->set_property = gst_pre_record_loop_set_property;
   gobject_class->get_property = gst_pre_record_loop_get_property;
 
@@ -1143,7 +1142,6 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
  * initialize instance structure
  */
 static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
-  g_print("Init\n");
 
   filter->sinkpad = gst_pad_new_from_static_template(&sink_factory, "sink");
   gst_pad_set_event_function(filter->sinkpad, gst_pre_record_loop_sink_event);
@@ -1226,7 +1224,6 @@ static gboolean prerecordloop_init(GstPlugin *prerecordloop) {
   GST_DEBUG_CATEGORY_INIT(prerec_dataflow, "pre_record_loop_dataflow",
                           GST_DEBUG_FG_CYAN | GST_DEBUG_BOLD,
                           "dataflow inside the prerec loop");
-  g_print("Plugin Init\n");
   return GST_ELEMENT_REGISTER(pre_record_loop, prerecordloop);
 }
 
