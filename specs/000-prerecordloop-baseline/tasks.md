@@ -16,25 +16,31 @@
 ## Phase 3.2: Tests First (TDD) ⚠️ MUST COMPLETE BEFORE 3.3
 **CRITICAL: These tests MUST be written and MUST FAIL before ANY implementation changes for those behaviors.**
 - [X] T009 [P] Unit test plugin registration: `tests/unit/test_plugin_registration.c`
-- [ ] T010 [P] Unit test QUEUE invariants (2-GOP floor pruning logic) `tests/unit/test_queue_pruning.c`
-- [ ] T011 [P] Unit test concurrent flush ignore: `tests/unit/test_concurrent_flush.c`
-- [ ] T012 [P] Unit test re-arm event transition: `tests/unit/test_rearm.c`
-- [ ] T013 [P] Unit test flush-on-eos AUTO semantics: `tests/unit/test_flush_on_eos.c`
-- [ ] T014 [P] Integration pipeline test: flush sequence (buffer → flush → pass-through) `tests/integration/test_flush_sequence.c`
-- [ ] T015 [P] Integration pipeline test: re-arm cycle `tests/integration/test_rearm_cycle.c`
-- [ ] T016 [P] Integration pipeline test: oversize GOP retention `tests/integration/test_oversize_gop.c`
-- [ ] T017 [P] Performance benchmark skeleton: `tests/perf/test_latency_prune.c` (measure added per-buffer latency)
-- [ ] T018 [P] Memory leak baseline test (valgrind wrapper script) `tests/memory/test_leaks.sh`
+- [X] T010 [P] Unit test queue pruning invariants (initial skeleton, forced fail) `tests/unit/test_queue_pruning.c`
+- [X] T011 [P] Unit test GOP floor (separate explicit 2-GOP floor check) `tests/unit/test_pruning_two_gop_floor.c`
+- [X] T012 [P] Unit test re-arm / flush trigger sequence (skeleton, forced fail) `tests/unit/test_rearm_sequence.c`
+- [X] T013 [P] Unit test flush-on-eos behavior (skeleton, forced fail) `tests/unit/test_flush_on_eos.c`
+ - [X] T014 [P] Integration pipeline test: flush sequence (skeleton, forced fail) `tests/integration/test_flush_sequence.c`
+ - [X] T015 [P] Integration pipeline test: re-arm cycle (skeleton, forced fail) `tests/integration/test_rearm_cycle.c`
+ - [X] T016 [P] Integration pipeline test: oversize GOP retention (skeleton, forced fail) `tests/integration/test_oversize_gop.c`
+ - [X] T017 [P] Performance benchmark skeleton: `tests/perf/test_latency_prune.c` (skeleton, forced fail; latency measurement TBD)
+ - [X] T018 [P] Memory leak baseline test (valgrind wrapper script) `tests/memory/test_leaks.sh` (skeleton, forced fail)
+
+### Phase 3.2 Support Utilities (Added)
+- [X] Shared pipeline helper (`PrerecTestPipeline`) and GOP push helper (`prerec_push_gop`) implemented
+- [X] Stats struct + accessor (`gst_prerec_get_stats`) added (partial for future assertions)
+- [X] Added temporary boolean `flush-on-eos` property and `flush-trigger-name` property earlier than scheduled (will refine to enum later)
 
 ## Phase 3.3: Core Implementation (ONLY after tests above are failing)
 - [ ] T019 Implement `max-time` property (integer seconds) in `gstprerecordloop/src/gstprerecordloop.c`
-- [ ] T020 Implement `flush-on-eos` enum property (auto/always/never) in same file
-- [ ] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function)
+- [ ] T020 (Refine) Replace provisional boolean `flush-on-eos` with enum (auto/always/never) & adjust tests
+- [ ] T020a Implement `flush-trigger-name` behavior validation & test using non-default value
+- [ ] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function) and convert T010/T011 to real assertions
 - [ ] T022 Implement ignoring concurrent `prerecord-flush` when `draining == TRUE`
-- [ ] T023 Implement `prerecord-arm` event handling to re-enter BUFFERING
+- [ ] T023 Implement `prerecord-arm` event handling to re-enter BUFFERING (add event name constant)
 - [ ] T024 Enforce sub-second floor behavior for `max-time` (document in property description)
-- [ ] T025 Update EOS handling for AUTO policy (flush only if PASS_THROUGH)
-- [ ] T026 Add internal counters: `gops_dropped`, `buffers_dropped`, `flush_count`, `rearm_count`
+- [ ] T025 Update EOS handling for AUTO policy (flush only if PASS_THROUGH) (depends on T020 enum)
+- [ ] T026 Add internal counters: `gops_dropped`, `buffers_dropped`, `flush_count`, `rearm_count` (PARTIAL: drops_* already present)
 - [ ] T027 Expose debug stats via GST_INFO log on state transition
 - [ ] T028 Remove buffer list helpers and related dead code entirely (final pass)
 - [ ] T029 Update queue dequeue path to avoid freeing internal node pointers
@@ -86,8 +92,10 @@ Task: T018 Memory leak baseline script
 - Avoid adding optimization until baseline correctness passes.
 
 ## Validation Checklist
-- [ ] All contract events (`prerecord-flush`, `prerecord-arm`) have tests (T011, T012, T014, T015)
-- [ ] All properties have tests (T009 for registration, T013 flush-on-eos, T010/T024 for max-time)
+- [ ] All contract events (`prerecord-flush`, `prerecord-arm`) have tests (current: flush trigger covered by T012; arm pending)
+- [ ] All properties have tests (current: flush-on-eos skeleton T013; max-time pending; enum refinement pending)
+- [ ] T010/T011 upgraded from forced fail to real assertions after pruning logic implemented
 - [ ] Tests precede implementation changes for each feature
 - [ ] Parallel [P] tasks touch distinct files
 - [ ] Memory safety improvements validated by T018 & T039
+- [ ] Stats counters asserted where meaningful once pruning logic lands (drops_gops / drops_buffers)

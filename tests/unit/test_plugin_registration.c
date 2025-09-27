@@ -1,7 +1,7 @@
 #include <gst/gst.h>
 #include <stdio.h>
 #include <string.h>
-#include "test_utils.h"
+#include <test_utils.h>
 
 /* T009: Plugin registration test
  * Validates that the prerecord loop element factory is discoverable
