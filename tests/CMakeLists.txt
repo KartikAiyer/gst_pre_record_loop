@@ -66,6 +66,15 @@ add_test(NAME prerec_unit_flush_on_eos COMMAND unit_test_flush_on_eos)
 set_tests_properties(prerec_unit_flush_on_eos PROPERTIES
   ENVIRONMENT "GST_PLUGIN_PATH=$<TARGET_FILE_DIR:gstprerecordloop>:$ENV{GST_PLUGIN_PATH}")
 
+# Unit Test: max-time property (T019 - expected failing until implemented)
+add_executable(unit_test_max_time_property unit/test_max_time_property.c)
+target_compile_features(unit_test_max_time_property PRIVATE c_std_11)
+target_include_directories(unit_test_max_time_property PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/unit)
+target_link_libraries(unit_test_max_time_property PRIVATE PkgConfig::gstreamer PkgConfig::GST_APP prerec_test_utils)
+add_test(NAME prerec_unit_max_time_property COMMAND unit_test_max_time_property)
+set_tests_properties(prerec_unit_max_time_property PROPERTIES
+  ENVIRONMENT "GST_PLUGIN_PATH=$<TARGET_FILE_DIR:gstprerecordloop>:$ENV{GST_PLUGIN_PATH}")
+
 # Integration Test: flush sequence (T014 - expected failing)
 add_executable(integration_test_flush_sequence integration/test_flush_sequence.c)
 target_compile_features(integration_test_flush_sequence PRIVATE c_std_11)

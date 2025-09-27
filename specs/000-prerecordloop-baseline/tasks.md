@@ -32,7 +32,7 @@
 - [X] Added temporary boolean `flush-on-eos` property and `flush-trigger-name` property earlier than scheduled (will refine to enum later)
 
 ## Phase 3.3: Core Implementation (ONLY after tests above are failing)
-- [ ] T019 Implement `max-time` property (integer seconds) in `gstprerecordloop/src/gstprerecordloop.c`
+- [X] T019 Implement `max-time` property (integer seconds) in `gstprerecordloop/src/gstprerecordloop.c`
 - [ ] T020 (Refine) Replace provisional boolean `flush-on-eos` with enum (auto/always/never) & adjust tests
 - [ ] T020a Implement `flush-trigger-name` behavior validation & test using non-default value
 - [ ] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function) and convert T010/T011 to real assertions

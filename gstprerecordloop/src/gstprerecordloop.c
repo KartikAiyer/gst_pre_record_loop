@@ -82,7 +82,7 @@ enum {
   LAST_SIGNAL
 };
 
-enum { PROP_0, PROP_SILENT, PROP_FLUSH_ON_EOS, PROP_FLUSH_TRIGGER_NAME };
+enum { PROP_0, PROP_SILENT, PROP_FLUSH_ON_EOS, PROP_FLUSH_TRIGGER_NAME, PROP_MAX_TIME };
 
 /* default property values */
 #define DEFAULT_MAX_SIZE_BUFFERS 200               /* 200 buffers */
@@ -258,6 +258,14 @@ static void gst_pre_record_loop_set_property(GObject *object, guint prop_id,
     filter->flush_trigger_name = s ? g_strdup(s) : NULL;
     break;
   }
+  case PROP_MAX_TIME: {
+    /* integer seconds, clamp >= 0; convert to nanoseconds */
+    gint secs = g_value_get_int(value);
+    if (secs < 0)
+      secs = 0;
+    filter->max_size.time = (guint64) secs * GST_SECOND;
+    break;
+  }
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;
@@ -277,6 +285,10 @@ static void gst_pre_record_loop_get_property(GObject *object, guint prop_id,
     break;
   case PROP_FLUSH_TRIGGER_NAME:
     g_value_set_string(value, filter->flush_trigger_name);
+    break;
+  case PROP_MAX_TIME:
+    /* Return current max seconds (rounded down) */
+    g_value_set_int(value, (gint) (filter->max_size.time / GST_SECOND));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1094,6 +1106,15 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
       g_param_spec_string("flush-trigger-name", "Flush Trigger Name",
                           "Custom downstream custom-event structure name that triggers flush (default: prerecord-flush)",
                           NULL, G_PARAM_READWRITE));
+
+  g_object_class_install_property(
+      gobject_class, PROP_MAX_TIME,
+      g_param_spec_int("max-time", "Max Time (s)",
+                       "Maximum buffered duration in seconds before pruning; non-positive means unlimited",
+                       G_MININT, /* min: allow negative so setter can clamp to 0 */
+                       G_MAXINT, /* max */
+                       (gint)(DEFAULT_MAX_SIZE_TIME / GST_SECOND), /* default */
+                       G_PARAM_READWRITE));
 
   gst_element_class_set_details_simple(
       gstelement_class, "PreRecordLoop", "Generic",
