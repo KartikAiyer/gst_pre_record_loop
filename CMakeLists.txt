@@ -19,6 +19,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 23)
 
+# Enable testing framework before adding subdirectories that register tests
+enable_testing()
+
 # Append the GStreamer path to PKG_CONFIG_PATH
 # Use a semicolon (;) as a separator for multiple paths
 if (NOT CURRENT_PKG_CONFIG_PATH STREQUAL "")
@@ -42,19 +45,10 @@ find_package(catch2 REQUIRED)
 
 add_subdirectory(gstprerecordloop)
 add_subdirectory(testapp)
+add_subdirectory(tests)
 
 if(BUILD_GTK_DOC)
   message(STATUS "gtk-doc build enabled (stub) - no targets yet")
   # Placeholder for future gtk-doc integration
 endif()
 
-# Tests root
-enable_testing()
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GST_CHECK REQUIRED IMPORTED_TARGET gstreamer-check-1.0)
-
-# Unit test skeleton (placeholder, real sources to be added later)
-add_executable(unit_tests tests/unit/test_placeholder.c)
-set_target_properties(unit_tests PROPERTIES C_STANDARD 11)
-target_link_libraries(unit_tests PRIVATE PkgConfig::gstreamer PkgConfig::GST_CHECK)
-add_test(NAME prerec_unit_placeholder COMMAND unit_tests)

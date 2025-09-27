@@ -4,18 +4,18 @@
 **Prerequisites**: plan.md (required), research.md, data-model.md, contracts/
 
 ## Phase 3.1: Setup
-- [ ] T001 Add `tests/` directory structure: `tests/unit`, `tests/integration`, `tests/perf`, `tests/memory`
-- [ ] T002 Create base `tests/unit/meson.build` or CMake additions for gst-check integration (extend existing build system)
-- [ ] T003 [P] Add `GST_DEBUG_CATEGORY` declarations for `pre_record_loop` and `pre_record_loop_dataflow` if missing
-- [ ] T004 [P] Add initial `docs/` folder with `CHANGELOG.md` skeleton
-- [ ] T005 Introduce `clang-format` config and (optional) `clang-tidy` preset
-- [ ] T006 [P] Add CI placeholder script `.ci/run-tests.sh` (will be fleshed out later)
-- [ ] T007 Add `gtk-doc` integration stub (CMake options) disabled by default
-- [ ] T008 [P] Remove obsolete buffer list code paths from `gstprerecordloop/src/gstprerecordloop.c` (mark commit message)
+- [X] T001 Add `tests/` directory structure: `tests/unit`, `tests/integration`, `tests/perf`, `tests/memory`
+- [X] T002 Create base `tests/unit/meson.build` or CMake additions for gst-check integration (extend existing build system)
+- [X] T003 [P] Add `GST_DEBUG_CATEGORY` declarations for `pre_record_loop` and `pre_record_loop_dataflow` if missing
+- [X] T004 [P] Add initial `docs/` folder with `CHANGELOG.md` skeleton
+- [X] T005 Introduce `clang-format` config and (optional) `clang-tidy` preset
+- [X] T006 [P] Add CI placeholder script `.ci/run-tests.sh` (enhanced with dual-config build, gst-inspect, style probe)
+- [X] T007 Add `gtk-doc` integration stub (CMake options) disabled by default
+- [X] T008 [P] Remove obsolete buffer list code paths from `gstprerecordloop/src/gstprerecordloop.c` (marked and purged)
 
 ## Phase 3.2: Tests First (TDD) ⚠️ MUST COMPLETE BEFORE 3.3
 **CRITICAL: These tests MUST be written and MUST FAIL before ANY implementation changes for those behaviors.**
-- [ ] T009 [P] Unit test plugin registration: `tests/unit/test_plugin_registration.c`
+- [X] T009 [P] Unit test plugin registration: `tests/unit/test_plugin_registration.c`
 - [ ] T010 [P] Unit test QUEUE invariants (2-GOP floor pruning logic) `tests/unit/test_queue_pruning.c`
 - [ ] T011 [P] Unit test concurrent flush ignore: `tests/unit/test_concurrent_flush.c`
 - [ ] T012 [P] Unit test re-arm event transition: `tests/unit/test_rearm.c`
