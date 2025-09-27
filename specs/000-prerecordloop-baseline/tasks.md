@@ -33,7 +33,7 @@
 
 ## Phase 3.3: Core Implementation (ONLY after tests above are failing)
 - [X] T019 Implement `max-time` property (integer seconds) in `gstprerecordloop/src/gstprerecordloop.c`
-- [ ] T020 (Refine) Replace provisional boolean `flush-on-eos` with enum (auto/always/never) & adjust tests
+- [X] T020 (Refine) Replace provisional boolean `flush-on-eos` with enum (auto/always/never) & adjust tests
 - [ ] T020a Implement `flush-trigger-name` behavior validation & test using non-default value
 - [ ] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function) and convert T010/T011 to real assertions
 - [ ] T022 Implement ignoring concurrent `prerecord-flush` when `draining == TRUE`

@@ -72,6 +72,24 @@
 
 #include <gstprerecordloop/gstprerecordloop.h>
 
+/* GType registration for flush-on-eos enum */
+GType
+gst_prerec_flush_on_eos_get_type (void)
+{
+  static GType flush_on_eos_type = 0;
+  static const GEnumValue flush_on_eos_types[] = {
+    {GST_PREREC_FLUSH_ON_EOS_AUTO, "Auto (flush only in pass-through mode)", "auto"},
+    {GST_PREREC_FLUSH_ON_EOS_ALWAYS, "Always flush on EOS", "always"},
+    {GST_PREREC_FLUSH_ON_EOS_NEVER, "Never flush on EOS", "never"},
+    {0, NULL, NULL}
+  };
+
+  if (!flush_on_eos_type) {
+    flush_on_eos_type = g_enum_register_static ("GstPreRecFlushOnEos", flush_on_eos_types);
+  }
+  return flush_on_eos_type;
+}
+
 GST_DEBUG_CATEGORY_STATIC(prerec_debug);
 #define GST_CAT_DEFAULT prerec_debug
 GST_DEBUG_CATEGORY_STATIC(prerec_dataflow);
@@ -250,7 +268,7 @@ static void gst_pre_record_loop_set_property(GObject *object, guint prop_id,
     filter->silent = g_value_get_boolean(value);
     break;
   case PROP_FLUSH_ON_EOS:
-    filter->flush_on_eos = g_value_get_boolean(value);
+    filter->flush_on_eos = (GstPreRecFlushOnEos) g_value_get_enum(value);
     break;
   case PROP_FLUSH_TRIGGER_NAME: {
     const gchar *s = g_value_get_string(value);
@@ -281,7 +299,7 @@ static void gst_pre_record_loop_get_property(GObject *object, guint prop_id,
     g_value_set_boolean(value, filter->silent);
     break;
   case PROP_FLUSH_ON_EOS:
-    g_value_set_boolean(value, filter->flush_on_eos);
+    g_value_set_enum(value, filter->flush_on_eos);
     break;
   case PROP_FLUSH_TRIGGER_NAME:
     g_value_set_string(value, filter->flush_trigger_name);
@@ -587,7 +605,8 @@ static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop *loop,
   switch (GST_EVENT_TYPE(event)) {
   case GST_EVENT_EOS:
     GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "got EOS from upstream");
-    if (loop->flush_on_eos) {
+    if (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_ALWAYS ||
+        (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_AUTO && loop->mode == GST_PREREC_MODE_PASS_THROUGH)) {
       gst_prerec_locked_flush(loop, FALSE);
     }
     loop->eos = TRUE;
@@ -832,7 +851,7 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
   case GST_EVENT_EOS:
     GST_PREREC_MUTEX_LOCK(loop);
     if (loop->mode == GST_PREREC_MODE_BUFFERING) {
-      if (loop->flush_on_eos) {
+      if (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_ALWAYS) {
         GstQueueItem *qitem;
         while ((qitem = gst_prerec_locked_dequeue(loop))) {
           if (GST_IS_BUFFER(qitem->item)) {
@@ -1096,9 +1115,10 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
 
   g_object_class_install_property(
       gobject_class, PROP_FLUSH_ON_EOS,
-      g_param_spec_boolean("flush-on-eos", "Flush On EOS",
-                           "If TRUE, queued buffers are pushed downstream before EOS is forwarded",
-                           FALSE, G_PARAM_READWRITE));
+      g_param_spec_enum("flush-on-eos", "Flush On EOS",
+                        "Policy for flushing queued buffers when EOS is received",
+                        GST_TYPE_PREREC_FLUSH_ON_EOS, GST_PREREC_FLUSH_ON_EOS_AUTO,
+                        G_PARAM_READWRITE));
 
   g_object_class_install_property(
       gobject_class, PROP_FLUSH_TRIGGER_NAME,
@@ -1196,7 +1216,7 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
   filter->preroll_sent = FALSE;
   /* init stats */
   memset(&filter->stats, 0, sizeof(filter->stats));
-  filter->flush_on_eos = FALSE;
+  filter->flush_on_eos = GST_PREREC_FLUSH_ON_EOS_AUTO;
   filter->flush_trigger_name = NULL;
 }
 

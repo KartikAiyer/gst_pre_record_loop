@@ -51,6 +51,16 @@
 
 G_BEGIN_DECLS
 
+/* Flush-on-EOS policy enumeration */
+typedef enum {
+  GST_PREREC_FLUSH_ON_EOS_AUTO,   /* flush only in pass-through mode */
+  GST_PREREC_FLUSH_ON_EOS_ALWAYS, /* always flush on EOS */
+  GST_PREREC_FLUSH_ON_EOS_NEVER   /* never flush on EOS */
+} GstPreRecFlushOnEos;
+
+#define GST_TYPE_PREREC_FLUSH_ON_EOS (gst_prerec_flush_on_eos_get_type())
+GType gst_prerec_flush_on_eos_get_type (void);
+
 #define GST_TYPE_PRERECORDLOOP (gst_pre_record_loop_get_type())
 G_DECLARE_FINAL_TYPE (GstPreRecordLoop, gst_pre_record_loop,
     GST, PRERECORDLOOP, GstElement)
@@ -127,7 +137,7 @@ typedef struct _GstPreRecordLoop
   gboolean head_needs_discont;
   gboolean tail_needs_discont;
 
-  gboolean flush_on_eos;
+  GstPreRecFlushOnEos flush_on_eos;
   gboolean preroll_sent;
 
   /* custom downstream event name that triggers flush (allocated) */
