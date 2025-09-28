@@ -37,6 +37,8 @@ prerec_add_gst_exec_test(unit pruning_two_gop_floor unit/test_pruning_two_gop_fl
 prerec_add_gst_exec_test(unit rearm_sequence unit/test_rearm_sequence.c)    # T012
 prerec_add_gst_exec_test(unit flush_on_eos unit/test_flush_on_eos.c)        # T013
 prerec_add_gst_exec_test(unit max_time_property unit/test_max_time_property.c) # T019
+prerec_add_gst_exec_test(unit flush_trigger_name unit/test_flush_trigger_name.c) # T020a
+prerec_add_gst_exec_test(unit no_refcount_critical unit/test_no_refcount_critical.c) # regression: ensure no refcount CRITICAL
 
 # Integration tests
 prerec_add_gst_exec_test(integration flush_sequence integration/test_flush_sequence.c) # T014
