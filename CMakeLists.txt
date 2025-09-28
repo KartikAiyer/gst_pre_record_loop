@@ -3,6 +3,7 @@ project(prerec C CXX)
 
 # Option: BUILD_GTK_DOC (Phase 3.1 T007) - disabled by default
 option(BUILD_GTK_DOC "Build gtk-doc API reference (requires gtk-doc tools)" OFF)
+option(PREREC_ENABLE_LIFE_DIAG "Enable prerecordloop lifecycle/sticky diagnostics (ref/push tracking)" OFF)
 
 # Get the existing PKG_CONFIG_PATH environment variable
 # If it's not set, it will be an empty string
