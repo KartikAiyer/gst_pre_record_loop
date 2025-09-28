@@ -652,11 +652,16 @@ static GstQueueItem* gst_prerec_locked_dequeue(GstPreRecordLoop* loop) {
   GstMiniObject* item;
   gsize          buf_size;
 
-
-static GstQueueItem *gst_prerec_locked_dequeue(GstPreRecordLoop *loop) {
-  GstQueueItem *qitem;
-  GstMiniObject *item;
-  gsize buf_size;
+  /* Ownership model (see data-model.md: Queue Ownership):
+   *  - Each GstQueueItem holds exactly one owned reference to a GstMiniObject.
+   *  - Buffers: no extra ref was taken at enqueue time; this is the original upstream ref.
+   *             Dequeue + push transfers that single ref to downstream (gst_pad_push or gst_pad_push_event).
+   *  - SEGMENT/GAP events: an extra ref was explicitly taken before enqueue (so default handler can still consume
+   *                        the original). Dequeue + push consumes the queue's retained ref.
+   *  - Other events: not enqueued; either observed (sticky) or forwarded immediately.
+   *  - If a dequeued item is not pushed (e.g. during drop/flush), we must unref it exactly once here or in the
+   *    caller (flush/drop paths call PREREC_UNREF).
+   */
 
   qitem = gst_vec_deque_pop_head_struct(loop->queue);
   if (qitem == NULL) {
@@ -690,7 +695,8 @@ static GstQueueItem *gst_prerec_locked_dequeue(GstPreRecordLoop *loop) {
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_SEGMENT:
       if (G_LIKELY(!loop->newseg_applied_to_src)) {
-        gst_pad_store_sticky_event(loop->srcpad, event);
+        /* Let default handler own sticky storage; just track */
+        prerec_track_sticky(loop, event, "dequeue-segment-observe");
         locked_apply_segment(loop, event, &loop->src_segment, FALSE);
       } else {
         loop->newseg_applied_to_src = FALSE;
@@ -716,22 +722,30 @@ static GstQueueItem *gst_prerec_locked_dequeue(GstPreRecordLoop *loop) {
 static void gst_prerec_locked_flush(GstPreRecordLoop* loop, gboolean full) {
   GstQueueItem* qitem;
   while ((qitem = gst_vec_deque_pop_head_struct(loop->queue))) {
-    if (!full && !GST_IS_QUERY(qitem->item) && GST_IS_EVENT(qitem->item) &&
-        GST_EVENT_IS_STICKY(qitem->item) &&
-        GST_EVENT_TYPE(qitem->item) != GST_EVENT_SEGMENT &&
-        GST_EVENT_TYPE(qitem->item) != GST_EVENT_EOS) {
-      gst_pad_store_sticky_event(loop->srcpad, GST_EVENT_CAST(qitem->item));
+    /* Flush queue item:
+     *  - We never manually re-store sticky events here (handled by GStreamer core).
+     *  - On FULL flush we also reset segment/timing state after the loop below.
+     *  - On PARTIAL flush we preserve segment/timing and just drop queued items. */
+    if (qitem->item) {
+      /* This unref matches the single owned reference described in the ownership model. */
+      GST_CAT_LOG_OBJECT(prerec_debug, loop, "FLUSH item=%p kind=%s ref(before)=%d full=%d", qitem->item,
+                         GST_IS_BUFFER(qitem->item) ? "buffer" : (GST_IS_EVENT(qitem->item) ? "event" : "other"),
+                         (int) GST_MINI_OBJECT_REFCOUNT_VALUE(qitem->item), full);
+      PREREC_UNREF(qitem->item, full ? "flush full" : "flush partial");
     }
-    gst_mini_object_unref(qitem->item);
     memset(qitem, 0, sizeof(GstQueueItem));
   }
   clear_level(&loop->cur_level);
+  if (full) {
     gst_segment_init(&loop->sink_segment, GST_FORMAT_TIME);
     gst_segment_init(&loop->src_segment, GST_FORMAT_TIME);
     loop->head_needs_discont = loop->tail_needs_discont = FALSE;
     loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
     loop->sink_start_time          = GST_CLOCK_STIME_NONE;
     loop->sink_tainted = loop->src_tainted = FALSE;
+  } else {
+    GST_CAT_LOG_OBJECT(prerec_debug, loop, "Partial flush: preserving segment timing state");
+  }
 
   GST_PREREC_SIGNAL_DEL(loop);
 }
@@ -741,8 +755,9 @@ static inline void gst_prerec_locked_enqueue_buffer(GstPreRecordLoop* loop, gpoi
   GstBuffer*   buffer = GST_BUFFER_CAST(item);
   gsize        bsize  = gst_buffer_get_size(buffer);
 
-  qitem.item = item;
-  qitem.is_query = FALSE;
+  /* Ownership: buffer enters with upstream refcount = 1 (exclusive ownership by caller).
+   * We do NOT gst_buffer_ref() here; the queue assumes ownership of that single ref.
+   * On subsequent push (trigger/EOS) we transfer ownership to downstream. If dropped, we unref in flush/drop paths. */
 
   qitem.item        = item;
   qitem.is_query    = FALSE;
@@ -772,7 +787,9 @@ static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop* loop, gpoin
   GstQueueItem qitem;
   GstEvent*    event = GST_EVENT_CAST(item);
 
-  GstEvent *event = GST_EVENT_CAST(item);
+  /* Ownership: caller passed an event we have just gst_event_ref()'d for SEGMENT/GAP in sink_event handler.
+   * For EOS we don't enqueue (handled immediately). For other serialized sticky events we only observe.
+   * Thus: every enqueued event has exactly one owned reference here. */
 
   switch (GST_EVENT_TYPE(event)) {
   case GST_EVENT_EOS:
@@ -1120,6 +1137,13 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
     GST_PREREC_MUTEX_LOCK(loop);
     if (GST_EVENT_IS_SERIALIZED(event)) {
       if (event->type == GST_EVENT_SEGMENT || event->type == GST_EVENT_GAP) {
+        /* Ownership rationale:
+         *  - We pass the original event to gst_pad_event_default() which will keep/use it (SEGMENT is sticky).
+         *  - We also need a queued copy for deferred emission during flush/trigger.
+         *  - Therefore we take an extra ref here; the queue later transfers ownership when pushing.
+         *  - We never manually store sticky events ourselves (avoids double store/double unref).
+         */
+        gst_event_ref(event);
         gst_prerec_locked_enqueue_event(loop, event);
       } else if (GST_EVENT_IS_STICKY(event)) {
         /* Observe only; default handler performs sticky storage. */
