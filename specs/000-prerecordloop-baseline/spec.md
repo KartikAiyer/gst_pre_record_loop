@@ -82,3 +82,36 @@ As an application that records video around motion or external trigger events, I
 - **CLAR-003**: (Resolved) Concurrent flush triggers ignored during active drain.
 - **CLAR-004**: (Resolved) Max-time granularity = integer seconds; floor sub-second inputs.
 - **CLAR-005**: (Resolved) Default flush-on-eos = AUTO (conditional flush only in PASS_THROUGH).
+
+## Implementation Note: Refcount / Lifecycle Integrity (Added 2025-09-27)
+
+During test development a GStreamer refcount assertion (`gst_mini_object_unref: assertion '... > 0' failed`) surfaced
+when flushing buffered data. Root cause analysis identified two ownership problems:
+
+1. Manual invocation of `gst_pad_store_sticky_event()` for serialized sticky events while also forwarding the same
+	 event to `gst_pad_event_default()` (double storage / over-unref hazard).
+2. Enqueuing SEGMENT and GAP events without taking an additional reference before later queue management unrefs.
+
+Resolution steps applied:
+- Removed all manual sticky event storage; delegate solely to the default event handler.
+- Added an explicit `gst_event_ref()` when queuing SEGMENT/GAP so the queue holds a distinct reference.
+- Added (and later compile-gated) verbose lifecycle instrumentation (`PREREC_ENABLE_LIFE_DIAG`) for targeted
+	diagnostics; default builds keep it disabled to reduce log noise.
+- Introduced regression test `prerec_unit_no_refcount_critical` to assert absence of refcount CRITICAL conditions in a
+	minimal pipeline scenario.
+
+Operational guidance:
+To re-enable deep lifecycle tracing for debugging future ownership issues, configure with
+`-DPREREC_ENABLE_LIFE_DIAG=1` and run relevant unit tests under
+`GST_DEBUG=GST_REFCOUNTING:7,prerec_lifecycle:7,prerec_dataflow:5`.
+
+This note ensures future changes respect the invariant: the queue and downstream path must never share a sticky or
+serialized event reference without explicit ref duplication and clearly defined single unref responsibility.
+
+Build Option Summary:
+`PREREC_ENABLE_LIFE_DIAG` is a standard CMake option (OFF by default) that injects `-DPREREC_ENABLE_LIFE_DIAG=1` into
+the plugin target, enabling:
+	- Allocation & use of lifecycle/sticky tracking hash tables
+	- Verbose LIFE-* and STICKY-TRACK debug messages
+	- Sequenced push/unref correlation (push_seq / unref_seq) for forensic analysis
+When OFF, all tracking functions collapse to no-ops and the tables are not compiled in (zero runtime overhead).

@@ -5,14 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(lldb) Launch Prerec",
+            "name": "(lldb) Launch unit_test_flush_trigger_name",
             "type": "cppdbg",
             "request": "launch",
-            "program": "enter program name, for example ${workspaceFolder}/a.out",
+            "program": "${workspaceFolder}/build/Debug/tests/unit_test_flush_trigger_name",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
-            "environment": [],
+            "environment": [{"name":"GST_PLUGIN_PATH", "value": "${workspaceFolder}/build/Debug/gstprerecordloop"},
+                            {"name":"G_DEBUG", "value": "fatal_warnings"},
+                            {"name":"GST_DEBUG", "value":"*:4,pre_record_loop:6,pre_record_loop_dataflow:6"}],
+            "externalConsole": false,
+            "MIMode": "lldb"
+        },
+        {
+            "name": "(lldb) Launch Prerec",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/testapp/prerec.app/Contents/MacOS/prerec",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [{"name": "GST_DEBUG", "value": "*:4,prerecloop:7,prerecloop_dataflow=7"}],
             "externalConsole": false,
             "MIMode": "lldb"
         },

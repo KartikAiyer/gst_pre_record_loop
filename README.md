@@ -20,6 +20,9 @@ downstream to the file sink.
 
 The filter is GOP aware. i.e it will always start at a key frame and when it drops frames, it will drop an entire GOP.
 
+For detailed queue ownership & refcount semantics (buffers vs SEGMENT/GAP events, sticky handling) see:
+`specs/000-prerecordloop-baseline/data-model.md` (Ownership / Refcount Semantics section).
+
 # Test Application
 
 At this point there are no unit tests, however I have created a test application that uses my filter in a pipeline. This is found in `testapp/src/main.cc`.
@@ -86,7 +89,126 @@ cmake --build --preset=conan-debug
 cmake --build --preset=conan-release
 ```
 
+## Build Options
+
+### `PREREC_ENABLE_LIFE_DIAG`
+
+This CMake option (OFF by default) compiles in additional lightweight lifecycle & dataflow diagnostics for the `prerecordloop` element. When disabled the added code paths are completely compiled out (zero branches added to hot paths).
+
+What it adds when enabled (`-DPREREC_ENABLE_LIFE_DIAG=1`):
+
+- Extra debug categories: `prerec_lifecycle` (state, events, queue ops) and `prerec_dataflow` (buffer movement & flush sequencing).
+- Internal tracking helpers for sticky events & object lifecycle (used during the original refcount bug investigation).
+- Safer experimentation space for future ownership audits without impacting production builds.
+
+Overhead considerations:
+- Disabled (default): no additional runtime cost.
+- Enabled: logging cost only when matching GST_DEBUG categories are activated; otherwise minimal (guards + occasional counter increments).
+
+Configure with diagnostics enabled (example Debug build):
+
+```sh
+cmake -S . -B build/Debug -DCMAKE_BUILD_TYPE=Debug -DPREREC_ENABLE_LIFE_DIAG=1
+cmake --build build/Debug --target gstprerecordloop
+```
+
+Run with lifecycle/dataflow logs (choose verbosity 1–7):
+
+```sh
+GST_DEBUG=prerec_lifecycle:7,prerec_dataflow:5 <your command>
+```
+
+Typical investigation recipe (inject refcount tracing too):
+
+```sh
+GST_DEBUG=GST_REFCOUNTING:7,prerec_lifecycle:7,prerec_dataflow:5 ctest -R prerec_unit_no_refcount_critical -V
+```
+
+If you only want core element logs without diagnostics (always available):
+
+```sh
+GST_DEBUG=*:4,pre_record_loop:5,pre_record_loop_dataflow:5 <your command>
+```
+
+Verification that diagnostics are compiled in:
+- Look for the build line containing `-DPREREC_ENABLE_LIFE_DIAG=1` in your CMake build output, or
+- Run with `GST_DEBUG=prerec_lifecycle:1` and confirm you see lifecycle category messages.
+
+## Refcount / Lifecycle Integrity
+
+During development a GStreamer refcount assertion (double unref of a mini-object) was observed when flushing buffered
+data. Root cause: manual sticky event storage combined with forwarding the same serialized event to the default handler
+and enqueuing SEGMENT/GAP without an owned reference. The fix:
+
+- Removed manual `gst_pad_store_sticky_event()` calls (delegate to `gst_pad_event_default`).
+- Added an extra ref when enqueuing SEGMENT / GAP so queue ownership is explicit.
+- Added (then gated) verbose lifecycle instrumentation for diagnostics. Diagnostics can now be enabled at build time
+	with `-DPREREC_ENABLE_LIFE_DIAG=1` (default is off for normal builds).
+- Added regression test `prerec_unit_no_refcount_critical` ensuring no `gst_mini_object_unref` refcount CRITICAL occurs
+	in a minimal pipeline scenario.
+
+If you need to troubleshoot ownership again:
+```sh
+cmake -S . -B build/Debug -DCMAKE_BUILD_TYPE=Debug -DPREREC_ENABLE_LIFE_DIAG=1
+GST_DEBUG=GST_REFCOUNTING:7,prerec_dataflow:5 ctest -R prerec_unit_flush_trigger_name -V
+```
+# Running Tests
+
+The project includes unit tests that can be executed using CTest. These tests verify the functionality of the prerecordloop element and help ensure refcount integrity.
+
+## Basic Test Execution
+
+To run all tests:
+
+```sh
+ctest --test-dir build/Debug
+```
+
+To run tests with verbose output:
+
+```sh
+ctest --test-dir build/Debug -V
+```
+
+## Running Specific Tests
+
+To run a specific test by name pattern:
+
+```sh
+ctest --test-dir build/Debug -R prerec_unit_no_refcount_critical
+```
+
+To run with verbose output for a specific test:
+
+```sh
+ctest --test-dir build/Debug -R prerec_unit_no_refcount_critical -V
+```
+
+## Test Execution with Debug Logging
+
+For detailed GStreamer logging during test execution:
+
+```sh
+GST_DEBUG=*:4,pre_record_loop:7,pre_record_loop_dataflow:7 ctest --test-dir build/Debug -V
+```
+
+If built with lifecycle diagnostics enabled (`PREREC_ENABLE_LIFE_DIAG=1`), you can also include:
+
+```sh
+GST_DEBUG=prerec_lifecycle:7,prerec_dataflow:5 ctest --test-dir build/Debug -R prerec_unit_no_refcount_critical -V
+```
+
+## Test Directory Structure
+
+Tests are organized by configuration:
+- Debug builds: Use `--test-dir build/Debug`
+- Release builds: Use `--test-dir build/Release`
+
+Make sure to specify the appropriate test directory based on your build configuration.
+
 # Running the test app from the Build directory
+
+NOTE: This testapp is not as useful as the unit tests and will soon be deprecated and removed.
 
 For brevity I will just consider the Debug version. The same shouls apply for a release version with the folders slightly modified.
 
@@ -100,5 +222,17 @@ build/Debug/testapp/prerec.app/Contents/MacOS/prerec
 If you want to get Gstreamer logging with the prerecloop module logging at high granularity run this instead
 
 ```sh
-GST_DEBUG=*:4,pre_record_loop:7,pre_record_loop_dataflow=7 build/Debug/testapp/prerec.app/Contents/MacOS/prerec
+GST_DEBUG=*:4,pre_record_loop:7,pre_record_loop_dataflow:7 build/Debug/testapp/prerec.app/Contents/MacOS/prerec
+```
+
+For lifecycle diagnostics (if built with `PREREC_ENABLE_LIFE_DIAG=1`) add:
+
+```sh
+GST_DEBUG=prerec_lifecycle:7,prerec_dataflow:5 build/Debug/testapp/prerec.app/Contents/MacOS/prerec
+```
+
+Or to exercise the unit test with diagnostics:
+
+```sh
+GST_DEBUG=prerec_lifecycle:7,prerec_dataflow:5 ctest -R prerec_unit_no_refcount_critical -V
 ```
