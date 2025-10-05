@@ -99,10 +99,10 @@ int main(int argc, char **argv) {
   const int cycles = 3;
 
   for (int cycle = 0; cycle < cycles; ++cycle) {
-    fprintf(stdout, "T015: === Cycle %d ===\n", cycle + 1);
+    g_print("T015: === Cycle %d ===\n", cycle + 1);
     
     /* === Phase A: Buffering (push 2 GOPs, expect 0 emissions) === */
-    fprintf(stdout, "T015: Cycle %d Phase A - Buffering 2 GOPs...\n", cycle + 1);
+    g_print("T015: Cycle %d Phase A - Buffering 2 GOPs...\n", cycle + 1);
     guint64 before_buffer = est.emitted;
     for (int g = 0; g < 2; ++g) {
       if (!prerec_push_gop(tp.appsrc, 1, &pts, dur, NULL))
@@ -115,10 +115,10 @@ int main(int argc, char **argv) {
               cycle + 1, (unsigned long long)buffered_emissions);
       return 1;
     }
-    fprintf(stdout, "T015: Cycle %d Phase A ✓ - 0 emissions (buffered)\n", cycle + 1);
+    g_print("T015: Cycle %d Phase A ✓ - 0 emissions (buffered)\n", cycle + 1);
 
     /* === Phase B: Flush (expect 4 buffers: 2 GOPs × 2 buffers each) === */
-    fprintf(stdout, "T015: Cycle %d Phase B - Flushing...\n", cycle + 1);
+    g_print("T015: Cycle %d Phase B - Flushing...\n", cycle + 1);
     guint64 before_flush = est.emitted;
     if (!send_flush_trigger(tp.pr, NULL)) return fail("flush trigger failed");
     wait_for_stable_emission(tp.pipeline, &est.emitted, 10, 100);
@@ -128,10 +128,10 @@ int main(int argc, char **argv) {
               cycle + 1, (unsigned long long)flushed_emissions);
       return 1;
     }
-    fprintf(stdout, "T015: Cycle %d Phase B ✓ - 4 buffers flushed\n", cycle + 1);
+    g_print("T015: Cycle %d Phase B ✓ - 4 buffers flushed\n", cycle + 1);
 
     /* === Phase C: Pass-through (push 1 GOP, expect immediate 2 emissions) === */
-    fprintf(stdout, "T015: Cycle %d Phase C - Pass-through 1 GOP...\n", cycle + 1);
+    g_print("T015: Cycle %d Phase C - Pass-through 1 GOP...\n", cycle + 1);
     guint64 before_passthrough = est.emitted;
     if (!prerec_push_gop(tp.appsrc, 1, &pts, dur, NULL))
       return fail("passthrough gop failed");
@@ -142,16 +142,16 @@ int main(int argc, char **argv) {
               cycle + 1, (unsigned long long)passthrough_emissions);
       return 1;
     }
-    fprintf(stdout, "T015: Cycle %d Phase C ✓ - 2 buffers emitted (pass-through)\n", cycle + 1);
+    g_print("T015: Cycle %d Phase C ✓ - 2 buffers emitted (pass-through)\n", cycle + 1);
 
     /* === Phase D: Re-arm === */
-    fprintf(stdout, "T015: Cycle %d Phase D - Re-arming...\n", cycle + 1);
+    g_print("T015: Cycle %d Phase D - Re-arming...\n", cycle + 1);
     if (!send_rearm_event(tp.pr)) return fail("rearm failed");
-    fprintf(stdout, "T015: Cycle %d Phase D ✓ - Re-armed\n", cycle + 1);
+    g_print("T015: Cycle %d Phase D ✓ - Re-armed\n", cycle + 1);
   }
 
   /* === Final: Buffer 1 GOP and flush === */
-  fprintf(stdout, "T015: Final - Buffering 1 GOP and flushing...\n");
+  g_print("T015: Final - Buffering 1 GOP and flushing...\n");
   guint64 before_final_buffer = est.emitted;
   if (!prerec_push_gop(tp.appsrc, 1, &pts, dur, NULL))
     return fail("final buffer push failed");
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
             (unsigned long long)final_flush_emissions);
     return 1;
   }
-  fprintf(stdout, "T015: Final ✓ - 2 buffers flushed\n");
+  g_print("T015: Final ✓ - 2 buffers flushed\n");
 
   /* Validate timestamp continuity */
   if (!est.pts_monotonic) return fail("PTS discontinuity detected");
@@ -184,7 +184,7 @@ int main(int argc, char **argv) {
             (unsigned long long)est.emitted, (unsigned long long)expected_total);
   }
 
-  fprintf(stdout, "T015 PASS: multi-cycle rearm successful (emitted=%" G_GUINT64_FORMAT ", PTS monotonic)\n", est.emitted);
+  g_print("T015 PASS: multi-cycle rearm successful (emitted=%" G_GUINT64_FORMAT ", PTS monotonic)\n", est.emitted);
   prerec_pipeline_shutdown(&tp);
   return 0;
 }

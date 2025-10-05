@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
   if (drops_buffers == 0)
     return fail("drops_buffers not incremented");
 
-  fprintf(stdout, "T010 PASS: gops_cur=%u drops_gops=%u drops_buf=%u buffers_cur=%u\n",
+  g_print("T010 PASS: gops_cur=%u drops_gops=%u drops_buf=%u buffers_cur=%u\n",
           queued_gops, drops_gops, drops_buffers, queued_buffers);
   prerec_pipeline_shutdown(&tp);
   return 0;

@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     return fail("2-GOP floor violated");
   if (drops_gops == 0)
     return fail("Expected at least one GOP drop");
-  fprintf(stdout, "T011 PASS: gops_cur=%u drops_gops=%u drops_buf=%u\n", queued_gops, drops_gops, drops_buffers);
+  g_print("T011 PASS: gops_cur=%u drops_gops=%u drops_buf=%u\n", queued_gops, drops_gops, drops_buffers);
   prerec_pipeline_shutdown(&tp);
   return 0;
 }

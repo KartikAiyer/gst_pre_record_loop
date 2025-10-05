@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
   const guint64 delta = GST_SECOND;
 
   /* === PHASE 1: Initial buffering (3 GOPs, expect 0 emissions) === */
-  fprintf(stdout, "T012: Phase 1 - Pushing 3 GOPs (buffering mode)...\n");
+  g_print("T012: Phase 1 - Pushing 3 GOPs (buffering mode)...\n");
   for (int i = 0; i < 3; ++i) {
     if (!prerec_push_gop(tp.appsrc, 2, &ts, delta, NULL))
       return fail("phase1: gop push failed");
@@ -65,20 +65,20 @@ int main(int argc, char **argv) {
     fprintf(stderr, "T012 FAIL: phase1 expected 0 emissions (buffering), got %llu\n", (unsigned long long)emitted);
     return 1;
   }
-  fprintf(stdout, "T012: Phase 1 ✓ - 0 emissions (buffers queued)\n");
+  g_print("T012: Phase 1 ✓ - 0 emissions (buffers queued)\n");
 
   /* === PHASE 2: First flush (expect 9 buffers: 3 GOPs × 3 buffers) === */
-  fprintf(stdout, "T012: Phase 2 - Sending first flush...\n");
+  g_print("T012: Phase 2 - Sending first flush...\n");
   if (!send_flush(tp.pr)) return fail("phase2: flush send failed");
   wait_for_stable_emission(tp.pipeline, &emitted, 10, 100);
   if (emitted != 9) {
     fprintf(stderr, "T012 FAIL: phase2 expected 9 emissions (3 GOPs), got %llu\n", (unsigned long long)emitted);
     return 1;
   }
-  fprintf(stdout, "T012: Phase 2 ✓ - 9 buffers flushed\n");
+  g_print("T012: Phase 2 ✓ - 9 buffers flushed\n");
 
   /* === PHASE 3: Pass-through (push 1 GOP, expect immediate emission of 2 buffers) === */
-  fprintf(stdout, "T012: Phase 3 - Pushing 1 GOP in pass-through mode...\n");
+  g_print("T012: Phase 3 - Pushing 1 GOP in pass-through mode...\n");
   guint64 before_passthrough = emitted;
   if (!prerec_push_gop(tp.appsrc, 1, &ts, delta, NULL))
     return fail("phase3: passthrough push failed");
@@ -88,10 +88,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "T012 FAIL: phase3 expected 2 emissions (pass-through), got %llu\n", (unsigned long long)passthrough_emitted);
     return 1;
   }
-  fprintf(stdout, "T012: Phase 3 ✓ - 2 buffers emitted immediately (pass-through)\n");
+  g_print("T012: Phase 3 ✓ - 2 buffers emitted immediately (pass-through)\n");
 
   /* === PHASE 4: Re-arm + buffer (push 1 GOP, expect 0 new emissions) === */
-  fprintf(stdout, "T012: Phase 4 - Sending re-arm and pushing 1 GOP...\n");
+  g_print("T012: Phase 4 - Sending re-arm and pushing 1 GOP...\n");
   if (!send_rearm(tp.pr)) return fail("phase4: rearm send failed");
   guint64 before_rearm = emitted;
   if (!prerec_push_gop(tp.appsrc, 2, &ts, delta, NULL))
@@ -102,10 +102,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "T012 FAIL: phase4 expected 0 emissions (buffering after re-arm), got %llu\n", (unsigned long long)rearm_emitted);
     return 1;
   }
-  fprintf(stdout, "T012: Phase 4 ✓ - 0 emissions (buffering resumed)\n");
+  g_print("T012: Phase 4 ✓ - 0 emissions (buffering resumed)\n");
 
   /* === PHASE 5: Second flush (expect 3 buffers: 1 GOP × 3 buffers) === */
-  fprintf(stdout, "T012: Phase 5 - Sending second flush...\n");
+  g_print("T012: Phase 5 - Sending second flush...\n");
   guint64 before_flush2 = emitted;
   if (!send_flush(tp.pr)) return fail("phase5: second flush send failed");
   wait_for_stable_emission(tp.pipeline, &emitted, 10, 100);
@@ -114,9 +114,9 @@ int main(int argc, char **argv) {
     fprintf(stderr, "T012 FAIL: phase5 expected 3 emissions (1 GOP), got %llu\n", (unsigned long long)flush2_emitted);
     return 1;
   }
-  fprintf(stdout, "T012: Phase 5 ✓ - 3 buffers flushed\n");
+  g_print("T012: Phase 5 ✓ - 3 buffers flushed\n");
 
-  fprintf(stdout, "T012 PASS: Complete re-arm cycle validated (total %llu emissions)\n", (unsigned long long)emitted);
+  g_print("T012 PASS: Complete re-arm cycle validated (total %llu emissions)\n", (unsigned long long)emitted);
   prerec_remove_probe(tp.pr, probe_id);
   prerec_pipeline_shutdown(&tp);
   return 0;

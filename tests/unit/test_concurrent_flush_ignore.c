@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
   }
   if (emitted == before_passthrough) return fail("no passthrough after flush (timeout)");
 
-  fprintf(stdout, "T022 PASS: emitted=%" G_GUINT64_FORMAT " after first flush, passthrough ok\n", emitted);
+  g_print("T022 PASS: emitted=%" G_GUINT64_FORMAT " after first flush, passthrough ok\n", emitted);
   prerec_pipeline_shutdown(&tp);
   return 0;
 }
