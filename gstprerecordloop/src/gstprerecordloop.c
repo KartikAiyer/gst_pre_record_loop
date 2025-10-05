@@ -1184,7 +1184,6 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
 
 static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
                                               GstEvent *event) {
-  gboolean result = TRUE;
   GstPreRecordLoop *loop = GST_PRERECORDLOOP(parent);
 
 #ifndef GST_DISABLE_GST_DEBUG
@@ -1193,22 +1192,44 @@ static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
 #endif
 
   switch (GST_EVENT_TYPE(event)) {
-  case GST_EVENT_RECONFIGURE:
+  case GST_EVENT_RECONFIGURE: {
     GST_PREREC_MUTEX_LOCK(loop);
     if (loop->srcresult == GST_FLOW_NOT_LINKED) {
-      /* when we got not linked, assume downstream is linked again now and we
-       * can try to start pushing again */
-      loop->srcresult = GST_FLOW_OK;
+      loop->srcresult = GST_FLOW_OK; /* assume downstream relinked */
     }
     GST_PREREC_MUTEX_UNLOCK(loop);
-
-    result = gst_pad_push_event(loop->sinkpad, event);
-    break;
-  default:
-    result = gst_pad_event_default(pad, parent, event);
-    break;
+    return gst_pad_push_event(loop->sinkpad, event);
   }
-  return result;
+  case GST_EVENT_CUSTOM_UPSTREAM: {
+    const GstStructure *st = gst_event_get_structure(event);
+    if (st && gst_structure_has_name(st, "prerecord-arm")) {
+      GST_PREREC_MUTEX_LOCK(loop);
+      if (loop->mode == GST_PREREC_MODE_PASS_THROUGH) {
+        loop->mode = GST_PREREC_MODE_BUFFERING;
+        loop->current_gop_id = 0;
+        loop->last_gop_id = 0;
+        loop->cur_level.time = 0;
+        loop->cur_level.buffers = 0;
+        loop->cur_level.bytes = 0;
+        gst_segment_init(&loop->sink_segment, GST_FORMAT_TIME);
+        gst_segment_init(&loop->src_segment, GST_FORMAT_TIME);
+        loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
+        loop->sink_start_time = GST_CLOCK_STIME_NONE;
+        loop->sink_tainted = loop->src_tainted = FALSE;
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received prerecord-arm: re-entering BUFFERING mode");
+      } else {
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received prerecord-arm while already BUFFERING - ignoring");
+      }
+      GST_PREREC_MUTEX_UNLOCK(loop);
+      gst_event_unref(event);
+      return TRUE; /* consumed */
+    }
+    /* Not our custom upstream event: fall through to default handler */
+    return gst_pad_event_default(pad, parent, event);
+  }
+  default:
+    return gst_pad_event_default(pad, parent, event);
+  }
 }
 
 static gboolean gst_pre_record_loop_src_query(GstPad *pad, GstObject *parent,

@@ -189,3 +189,20 @@ an explicit `draining` flag to guard re-entrancy.
 
 Testing: Unit test T022 validates only one emission batch occurs and that a subsequent trigger produces no additional
 queued emission before a new live buffer arrives in pass-through mode.
+
+## Re-Arm Event (Added 2025-10-04 for T023)
+Custom upstream event name: `prerecord-arm` (sent using `GST_EVENT_CUSTOM_UPSTREAM`).
+
+Behavior:
+- Valid only while the element is in PASS_THROUGH mode; on receipt it transitions back to BUFFERING.
+- Resets GOP baseline counters (`current_gop_id` / `last_gop_id`) and timing segments but does not retroactively affect
+	already forwarded frames.
+- Ignored (with INFO log) if received while already in BUFFERING.
+- After re-arm, newly arriving buffers are accumulated again and subject to pruning rules and subsequent flush cycles.
+
+Lifecycle Example:
+1. BUFFERING (accumulate) → prerecord-flush → PASS_THROUGH (drain + live) → prerecord-arm → BUFFERING (fresh window) → prerecord-flush …
+
+Tests:
+- T012 (unit): Verifies re-entry to buffering by inspecting queued GOP stats after arm.
+- T015 (integration): Exercises full flush → arm → flush cycle.

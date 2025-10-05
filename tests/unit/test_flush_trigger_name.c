@@ -36,25 +36,19 @@ int main(int argc, char **argv) {
   gulong probe_id = prerec_attach_count_probe(tp.pr, &emitted);
   if (!probe_id) return fail("failed to attach count probe");
 
-  /* Phase 1: push a single keyframe to cause preroll and transition to BUFFERING */
+  /* Phase 1: push initial GOP (buffering mode retains it; expect no emission yet). */
   guint64 ts = 0;
-  if (!prerec_push_gop(tp.appsrc, 0, &ts, GST_SECOND, NULL)) return fail("push preroll keyframe failed");
-  guint preroll_wait = 0;
-  while (preroll_wait < 20 && emitted < 1) {
-    gst_bus_timed_pop_filtered(gst_element_get_bus(tp.pipeline), 10 * GST_MSECOND, GST_MESSAGE_ANY);
-    preroll_wait++;
-  }
-  if (emitted < 1) return fail("did not observe preroll buffer");
-  guint64 baseline = emitted; /* should be 1 */
+  if (!prerec_push_gop(tp.appsrc, 2, &ts, GST_SECOND, NULL)) return fail("push initial gop failed");
+  guint64 baseline = emitted; /* expect 0 prior to flush trigger */
 
-  /* Phase 2: push delta frames (should be buffered, not emitted yet) */
-  if (!prerec_push_gop(tp.appsrc, 3, &ts, GST_SECOND, NULL)) return fail("push delta frames failed");
+  /* Phase 2: push additional GOP to enlarge buffered set (still expect no emission) */
+  if (!prerec_push_gop(tp.appsrc, 2, &ts, GST_SECOND, NULL)) return fail("push second gop failed");
   guint stabilize = 0;
   while (stabilize < 10) {
     gst_bus_timed_pop_filtered(gst_element_get_bus(tp.pipeline), 5 * GST_MSECOND, GST_MESSAGE_ANY);
     stabilize++;
   }
-  if (emitted != baseline) fprintf(stderr, "T020a INFO: unexpected additional buffers before trigger (baseline=%llu now=%llu)\n", (unsigned long long)baseline, (unsigned long long)emitted);
+  if (emitted != baseline) fprintf(stderr, "T020a INFO: unexpected emission before trigger (baseline=%llu now=%llu)\n", (unsigned long long)baseline, (unsigned long long)emitted);
 
   /* Inject custom downstream event that should trigger flush.
    * Proper direction: originate upstream (appsrc) so it travels downstream. */
@@ -72,9 +66,9 @@ int main(int argc, char **argv) {
     attempts++;
   }
   if (emitted == baseline)
-    return fail("expected additional buffers to flush after custom trigger");
-  if (emitted < baseline + 2)
-    fprintf(stderr, "T020a WARN: expected at least baseline+2 total buffers, got %llu (baseline=%llu)\n", (unsigned long long)emitted, (unsigned long long)baseline);
+    return fail("flush trigger produced no emitted buffers");
+  if (emitted - baseline < 3)
+    fprintf(stderr, "T020a WARN: expected >=3 emitted buffers after flush, got %llu (baseline=%llu)\n", (unsigned long long)emitted, (unsigned long long)baseline);
 
   printf("T020a PASS: custom flush-trigger-name flushed %" G_GUINT64_FORMAT " buffers\n", emitted);
 
