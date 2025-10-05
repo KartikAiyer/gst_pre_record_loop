@@ -45,7 +45,9 @@
 /**
  * SECTION:element-prerecordloop
  *
- * FIXME:Describe prerecordloop here.
+ * The prerecordloop element continuously buffers encoded video data in BUFFERING mode.
+ * Upon receiving a flush trigger event, it drains buffered GOPs and transitions to
+ * PASS_THROUGH mode. A re-arm event returns it to BUFFERING mode.
  *
  * <refsect2>
  * <title>Example launch line</title>
@@ -252,8 +254,6 @@ static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
 
 /* Internal static helper forward decl */
 static void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats);
-
-// Removed gst_pre_record_loop_src_pad_task as we're not using it anymore
 
 typedef struct {
   GstMiniObject *item;
@@ -615,7 +615,7 @@ static void locked_apply_gap(GstPreRecordLoop *loop, GstEvent *event,
   update_time_level(loop);
 }
 
-/** TODO */
+/* Apply buffer timestamp/duration to update time level accounting */
 static void locked_apply_buffer(GstPreRecordLoop *loop, GstBuffer *buffer,
                                 GstSegment *segment, gboolean is_sink) {
   GstClockTime duration = GST_BUFFER_DURATION(buffer);
@@ -1540,7 +1540,6 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
   filter->gop_size = 0;
   filter->last_gop_id = 0;
   filter->num_gops = 0;
-  /* gops_in_queue removed */
   filter->preroll_sent = FALSE;
   /* init stats */
   memset(&filter->stats, 0, sizeof(filter->stats));
