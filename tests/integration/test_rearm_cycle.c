@@ -19,7 +19,7 @@
  *   - Buffering vs pass-through behavior transitions
  */
 
-static int fail(const char *msg) { fprintf(stderr, "T015 FAIL: %s\n", msg); return 1; }
+static int fail(const char *msg) { g_critical("T015 FAIL: %s", msg); return 1; }
 
 static gboolean send_flush_trigger(GstElement *pr, const char *name) {
   const gchar *evname = name ? name : "prerecord-flush";

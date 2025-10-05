@@ -8,7 +8,7 @@
  * buffered (unless fewer than two have ever been queued). Validate stats.
  */
 
-static int fail(const char *msg) { fprintf(stderr, "T011 FAIL: %s\n", msg); return 1; }
+static int fail(const char *msg) { g_critical("T011 FAIL: %s", msg); return 1; }
 
 int main(int argc, char **argv) {
   prerec_test_init(&argc, &argv);

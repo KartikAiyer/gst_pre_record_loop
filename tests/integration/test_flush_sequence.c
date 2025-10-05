@@ -9,7 +9,7 @@
  * unimplemented; forced failing test.
  */
 
-static int fail(const char *msg) { fprintf(stderr, "T014 FAIL (expected): %s\n", msg); return 1; }
+static int fail(const char *msg) { g_critical("T014 FAIL (expected): %s", msg); return 1; }
 
 static void send_flush_trigger(GstElement *pr, const char *name) {
   GstPad *sinkpad = gst_element_get_static_pad(pr, "sink");

@@ -8,7 +8,7 @@
  * pruned mid-GOP; pruning should drop whole GOPs only. Forced fail until pruning logic solid.
  */
 
-static int fail(const char *msg) { fprintf(stderr, "T016 FAIL (expected): %s\n", msg); return 1; }
+static int fail(const char *msg) { g_critical("T016 FAIL (expected): %s", msg); return 1; }
 
 int main(int argc, char **argv) {
   prerec_test_init(&argc, &argv);

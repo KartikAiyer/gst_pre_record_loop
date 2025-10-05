@@ -9,7 +9,7 @@
  * push timestamp and (future) downstream emission when flushing.
  */
 
-static int fail(const char *msg) { fprintf(stderr, "T017 FAIL (expected placeholder): %s\n", msg); return 1; }
+static int fail(const char *msg) { g_critical("T017 FAIL (expected placeholder): %s", msg); return 1; }
 
 int main(int argc, char **argv) {
   prerec_test_init(&argc, &argv);

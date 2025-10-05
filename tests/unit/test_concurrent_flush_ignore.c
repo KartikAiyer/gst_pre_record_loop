@@ -12,7 +12,7 @@
  *  5. Verify no additional buffers/events are emitted beyond first drain (count unchanged after short wait).
  */
 
-static int fail(const char *msg) { fprintf(stderr, "T022 FAIL: %s\n", msg); return 1; }
+static int fail(const char *msg) { g_critical("T022 FAIL: %s", msg); return 1; }
 
 int main(int argc, char **argv) {
   prerec_test_init(&argc, &argv);

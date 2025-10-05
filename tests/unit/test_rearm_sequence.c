@@ -12,7 +12,7 @@
 #include <gst/app/gstappsrc.h>
 #include <stdio.h>
 
-static int fail(const char *msg) { fprintf(stderr, "T012 FAIL: %s\n", msg); return 1; }
+static int fail(const char *msg) { g_critical("T012 FAIL: %s", msg); return 1; }
 
 static gboolean send_flush(GstElement *pr) {
   GstStructure *s = gst_structure_new_empty("prerecord-flush");

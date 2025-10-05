@@ -9,7 +9,7 @@
  */
 
 static int fail(const char *msg) {
-  fprintf(stderr, "T013 FAIL: %s\n", msg);
+  g_critical("T013 FAIL: %s", msg);
   return 1;
 }
 
