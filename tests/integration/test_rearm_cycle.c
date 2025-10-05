@@ -1,8 +1,3 @@
-#include <test_utils.h>
-#include <gst/gst.h>
-#include <gst/app/gstappsrc.h>
-#include <stdio.h>
-
 /* T015: Integration - multi re-arm cycles with emission validation
  * 
  * Test Flow (3 cycles):
@@ -19,7 +14,11 @@
  *   - Buffering vs pass-through behavior transitions
  */
 
-static int fail(const char *msg) { g_critical("T015 FAIL: %s", msg); return 1; }
+#define FAIL_PREFIX "T015 FAIL: "
+#include <test_utils.h>
+#include <gst/gst.h>
+#include <gst/app/gstappsrc.h>
+#include <stdio.h>
 
 static gboolean send_flush_trigger(GstElement *pr, const char *name) {
   const gchar *evname = name ? name : "prerecord-flush";
@@ -79,20 +78,20 @@ static void wait_for_stable_emission(GstElement *pipeline, guint64 *emitted_ptr,
 
 int main(int argc, char **argv) {
   prerec_test_init(&argc, &argv);
-  if (!prerec_factory_available()) return fail("factory not available");
+  if (!prerec_factory_available()) FAIL("factory not available");
   PrerecTestPipeline tp;
-  if (!prerec_pipeline_create(&tp, "t015-rearm-multicycle")) return fail("pipeline create failed");
+  if (!prerec_pipeline_create(&tp, "t015-rearm-multicycle")) FAIL("pipeline create failed");
 
   /* Larger max-time to ensure no pruning during cycles */
   g_object_set(tp.pr, "max-time", (guint64)(10 * GST_SECOND), NULL);
 
   /* Attach probe with timestamp continuity tracking */
   GstPad *srcpad = gst_element_get_static_pad(tp.pr, "src");
-  if (!srcpad) return fail("no src pad");
+  if (!srcpad) FAIL("no src pad");
   EmissionStats est = {0, GST_CLOCK_TIME_NONE, TRUE};
   gulong pid = gst_pad_add_probe(srcpad, GST_PAD_PROBE_TYPE_BUFFER, integration_count_probe_cb, &est, NULL);
   gst_object_unref(srcpad);
-  if (!pid) return fail("probe attach failed");
+  if (!pid) FAIL("probe attach failed");
 
   guint64 pts = 0;
   const guint64 dur = GST_SECOND;
@@ -106,47 +105,41 @@ int main(int argc, char **argv) {
     guint64 before_buffer = est.emitted;
     for (int g = 0; g < 2; ++g) {
       if (!prerec_push_gop(tp.appsrc, 1, &pts, dur, NULL))
-        return fail("buffer phase gop push failed");
+        FAIL("buffer phase gop push failed");
     }
     wait_for_stable_emission(tp.pipeline, &est.emitted, 10, 50);
     guint64 buffered_emissions = est.emitted - before_buffer;
-    if (buffered_emissions != 0) {
-      fprintf(stderr, "T015 FAIL: cycle %d phase A expected 0 emissions (buffering), got %llu\n",
-              cycle + 1, (unsigned long long)buffered_emissions);
-      return 1;
-    }
+    if (buffered_emissions != 0)
+      FAIL("cycle %d phase A expected 0 emissions (buffering), got %llu",
+           cycle + 1, (unsigned long long)buffered_emissions);
     g_print("T015: Cycle %d Phase A ✓ - 0 emissions (buffered)\n", cycle + 1);
 
     /* === Phase B: Flush (expect 4 buffers: 2 GOPs × 2 buffers each) === */
     g_print("T015: Cycle %d Phase B - Flushing...\n", cycle + 1);
     guint64 before_flush = est.emitted;
-    if (!send_flush_trigger(tp.pr, NULL)) return fail("flush trigger failed");
+    if (!send_flush_trigger(tp.pr, NULL)) FAIL("flush trigger failed");
     wait_for_stable_emission(tp.pipeline, &est.emitted, 10, 100);
     guint64 flushed_emissions = est.emitted - before_flush;
-    if (flushed_emissions != 4) {
-      fprintf(stderr, "T015 FAIL: cycle %d phase B expected 4 emissions (2 GOPs), got %llu\n",
-              cycle + 1, (unsigned long long)flushed_emissions);
-      return 1;
-    }
+    if (flushed_emissions != 4)
+      FAIL("cycle %d phase B expected 4 emissions (2 GOPs), got %llu",
+           cycle + 1, (unsigned long long)flushed_emissions);
     g_print("T015: Cycle %d Phase B ✓ - 4 buffers flushed\n", cycle + 1);
 
     /* === Phase C: Pass-through (push 1 GOP, expect immediate 2 emissions) === */
     g_print("T015: Cycle %d Phase C - Pass-through 1 GOP...\n", cycle + 1);
     guint64 before_passthrough = est.emitted;
     if (!prerec_push_gop(tp.appsrc, 1, &pts, dur, NULL))
-      return fail("passthrough gop failed");
+      FAIL("passthrough gop failed");
     wait_for_stable_emission(tp.pipeline, &est.emitted, 10, 50);
     guint64 passthrough_emissions = est.emitted - before_passthrough;
-    if (passthrough_emissions != 2) {
-      fprintf(stderr, "T015 FAIL: cycle %d phase C expected 2 emissions (pass-through), got %llu\n",
-              cycle + 1, (unsigned long long)passthrough_emissions);
-      return 1;
-    }
+    if (passthrough_emissions != 2)
+      FAIL("cycle %d phase C expected 2 emissions (pass-through), got %llu",
+           cycle + 1, (unsigned long long)passthrough_emissions);
     g_print("T015: Cycle %d Phase C ✓ - 2 buffers emitted (pass-through)\n", cycle + 1);
 
     /* === Phase D: Re-arm === */
     g_print("T015: Cycle %d Phase D - Re-arming...\n", cycle + 1);
-    if (!send_rearm_event(tp.pr)) return fail("rearm failed");
+    if (!send_rearm_event(tp.pr)) FAIL("rearm failed");
     g_print("T015: Cycle %d Phase D ✓ - Re-armed\n", cycle + 1);
   }
 
@@ -154,28 +147,24 @@ int main(int argc, char **argv) {
   g_print("T015: Final - Buffering 1 GOP and flushing...\n");
   guint64 before_final_buffer = est.emitted;
   if (!prerec_push_gop(tp.appsrc, 1, &pts, dur, NULL))
-    return fail("final buffer push failed");
+    FAIL("final buffer push failed");
   wait_for_stable_emission(tp.pipeline, &est.emitted, 10, 50);
-  if (est.emitted != before_final_buffer) {
-    fprintf(stderr, "T015 FAIL: final buffering emitted %llu buffers (expected 0)\n",
-            (unsigned long long)(est.emitted - before_final_buffer));
-    return 1;
-  }
+  if (est.emitted != before_final_buffer)
+    FAIL("final buffering emitted %llu buffers (expected 0)",
+         (unsigned long long)(est.emitted - before_final_buffer));
   
   guint64 before_final_flush = est.emitted;
-  if (!send_flush_trigger(tp.pr, NULL)) return fail("final flush failed");
+  if (!send_flush_trigger(tp.pr, NULL)) FAIL("final flush failed");
   wait_for_stable_emission(tp.pipeline, &est.emitted, 10, 100);
   guint64 final_flush_emissions = est.emitted - before_final_flush;
-  if (final_flush_emissions != 2) {
-    fprintf(stderr, "T015 FAIL: final flush expected 2 emissions, got %llu\n",
-            (unsigned long long)final_flush_emissions);
-    return 1;
-  }
+  if (final_flush_emissions != 2)
+    FAIL("final flush expected 2 emissions, got %llu",
+         (unsigned long long)final_flush_emissions);
   g_print("T015: Final ✓ - 2 buffers flushed\n");
 
   /* Validate timestamp continuity */
-  if (!est.pts_monotonic) return fail("PTS discontinuity detected");
-  if (est.emitted == 0) return fail("no buffers emitted overall");
+  if (!est.pts_monotonic) FAIL("PTS discontinuity detected");
+  if (est.emitted == 0) FAIL("no buffers emitted overall");
 
   /* Expected total: 3 cycles × (4 flush + 2 pass-through) + 2 final = 20 buffers */
   guint64 expected_total = (3 * (4 + 2)) + 2;

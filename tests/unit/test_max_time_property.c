@@ -1,7 +1,5 @@
 #include <gst/gst.h>
 #include <stdio.h>
-#include <test_utils.h>
-
 /* T019: max-time property test (initial failing skeleton)
  * Goal: Ensure the element exposes integer seconds property "max-time" that
  * maps to internal max_size.time (in nanoseconds) with floor at 0 and
@@ -10,14 +8,15 @@
  * This skeleton intentionally forces failure until the property is implemented.
  */
 
-static int fail(const char *msg) { g_critical("T019 FAIL (expected): %s", msg); return 1; }
+#define FAIL_PREFIX "T019 FAIL (expected): "
+#include <test_utils.h>
 
 int main(int argc, char **argv) {
   prerec_test_init(&argc, &argv);
-  if (!prerec_factory_available()) return fail("factory not available");
+  if (!prerec_factory_available()) FAIL("factory not available");
 
   GstElement *el = prerec_create_element();
-  if (!el) return fail("could not create element");
+  if (!el) FAIL("could not create element");
 
   GParamSpec *pspec = g_object_class_find_property(G_OBJECT_GET_CLASS(el), "max-time");
   if (!pspec) {

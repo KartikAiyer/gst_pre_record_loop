@@ -55,6 +55,23 @@ gboolean prerec_wait_for_stats(GstElement *pr, guint min_gops, guint min_drops_g
 gulong prerec_attach_count_probe(GstElement *el, guint64 *counter_out);
 void prerec_remove_probe(GstElement *el, gulong id);
 
+/* Macro for test failures with variadic printf-style formatting.
+ * Usage: FAIL("expected %d, got %d", expected, actual);
+ * Logs critical message with test ID prefix and returns 1 for test failure.
+ * Note: Test files should define FAIL_PREFIX before including this header, e.g.:
+ *   #define FAIL_PREFIX "T012 FAIL: "
+ * If not defined, a default prefix is used.
+ */
+#ifndef FAIL_PREFIX
+#define FAIL_PREFIX "TEST FAIL: "
+#endif
+
+#define FAIL(...) \
+  do { \
+    g_critical(FAIL_PREFIX __VA_ARGS__); \
+    return 1; \
+  } while (0)
+
 #ifdef __cplusplus
 }
 #endif
