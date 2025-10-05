@@ -147,8 +147,6 @@ typedef struct _GstPreRecordLoop
   GstPreRecStats stats;
 }GstPreRecordLoop;
 
-/* Accessor to snapshot current stats (thread-safe copy) */
-void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats);
 
 G_END_DECLS
 

@@ -35,7 +35,7 @@
 - [X] T019 Implement `max-time` property (integer seconds) in `gstprerecordloop/src/gstprerecordloop.c`
 - [X] T020 (Refine) Replace provisional boolean `flush-on-eos` with enum (auto/always/never) & adjust tests
 - [X] T020a Implement `flush-trigger-name` behavior validation & test using non-default value
-- [ ] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function) and convert T010/T011 to real assertions
+- [X] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function) and convert T010/T011 to real assertions
 - [ ] T022 Implement ignoring concurrent `prerecord-flush` when `draining == TRUE`
 - [ ] T023 Implement `prerecord-arm` event handling to re-enter BUFFERING (add event name constant)
 - [ ] T024 Enforce sub-second floor behavior for `max-time` (document in property description)

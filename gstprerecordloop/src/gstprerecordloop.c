@@ -250,6 +250,9 @@ static gboolean gst_pre_record_loop_src_query(GstPad *pad, GstObject *parent,
 static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
                                                GstBuffer *buf);
 
+/* Internal static helper forward decl */
+static void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats);
+
 // Removed gst_pre_record_loop_src_pad_task as we're not using it anymore
 
 typedef struct {
@@ -762,7 +765,9 @@ static inline void gst_prerec_locked_enqueue_buffer(GstPreRecordLoop* loop, gpoi
   qitem.item        = item;
   qitem.is_query    = FALSE;
   qitem.is_keyframe = !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
-  loop->current_gop_id += (qitem.is_keyframe) ? 1 : 0;
+    if (qitem.is_keyframe) {
+      loop->current_gop_id += 1; /* new GOP enters; implicit count via id diff */
+    }
   qitem.gop_id = loop->current_gop_id;
   qitem.size   = bsize;
   if (gst_vec_deque_get_length(loop->queue) == 0 || loop->cur_level.buffers == 0) {
@@ -942,6 +947,25 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
     loop->stats.queued_gops_cur = loop->current_gop_id - loop->last_gop_id + 1;
 }
 
+/* Heuristic GOP count: relies on invariants that queue always begins at a
+ * keyframe boundary (drop/flush logic enforces) and each enqueued keyframe
+ * monotonically increments current_gop_id while last_gop_id tracks the GOP id
+ * at the head of the queue. Thus number of queued GOPs = current - last + 1.
+ */
+static inline guint gst_prerec_queued_gops(GstPreRecordLoop *loop) {
+  if (loop->cur_level.buffers == 0)
+    return 0;
+  if (loop->current_gop_id >= loop->last_gop_id)
+    return (loop->current_gop_id - loop->last_gop_id + 1);
+  /* Should not happen, but return 0 defensively */
+  return 0;
+}
+static inline gboolean gst_prerec_should_prune(GstPreRecordLoop *loop) {
+  if (!gst_loop_is_filled(loop))
+    return FALSE;
+  return gst_prerec_queued_gops(loop) > 2; /* enforce 2-GOP floor */
+}
+
 
 /* chain function
  * this function does the actual processing
@@ -976,24 +1000,14 @@ static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
       GST_TIME_ARGS(duration), is_keyframe ? "YES" : "NO");
 
   switch (loop->mode) {
-    case GST_PREREC_MODE_PASS_THROUGH:
-      // During preroll, we need to send at least one buffer downstream to complete preroll
-      if (!loop->preroll_sent) {
-        GST_CAT_INFO_OBJECT(prerec_debug, loop, "Sending preroll buffer downstream");
-        loop->preroll_sent = TRUE;
-        // Switch to buffering mode after preroll
-        loop->mode = GST_PREREC_MODE_BUFFERING;
-        GstFlowReturn ret = gst_pad_push(loop->srcpad, buffer);
-        GST_PREREC_MUTEX_UNLOCK(loop);
-        return ret;
-      } else {
-        // Normal passthrough mode (after custom event)
-        GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "Passthrough mode - forwarding buffer");
-        GstFlowReturn ret = gst_pad_push(loop->srcpad, buffer);
-        GST_PREREC_MUTEX_UNLOCK(loop);
-        return ret;
-      }
-      break;
+    case GST_PREREC_MODE_PASS_THROUGH: {
+      /* True pass-through: forward buffer immediately without queuing. */
+      GstFlowReturn fret;
+      GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "Pass-through mode - pushing buffer directly");
+      GST_PREREC_MUTEX_UNLOCK(loop); /* release lock before downstream push */
+      fret = gst_pad_push(loop->srcpad, buffer); /* consumes buffer ref */
+      return fret;
+    }
 
     case GST_PREREC_MODE_BUFFERING:
       GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "Buffering mode - storing buffer");
@@ -1001,11 +1015,20 @@ static GstFlowReturn gst_pre_record_loop_chain(GstPad *pad, GstObject *parent,
       // Add buffer to ring buffer
       gst_prerec_locked_enqueue_buffer(loop, buffer);
       
-      // Check if buffer is full and drop old frames if needed
-      while (gst_loop_is_filled(loop)) {
-        GST_CAT_LOG_OBJECT(prerec_debug, loop, "Buffer full, dropping oldest GOP");
+      // Check if buffer is full and drop old GOPs if needed while staying above 2-GOP floor
+      while (gst_prerec_should_prune(loop)) {
+        guint before = gst_prerec_queued_gops(loop);
+        GST_CAT_LOG_OBJECT(prerec_debug, loop, "Prune loop start: queued_gops=%u", before);
         gst_prerec_locked_drop(loop);
+        guint after = gst_prerec_queued_gops(loop);
+        GST_CAT_LOG_OBJECT(prerec_debug, loop, "Prune loop end: queued_gops=%u", after);
+        if (after <= 2) break; /* safety net */
+        if (after >= before) break; /* no progress safeguard */
       }
+
+      /* Update live stats snapshot after enqueue/prune */
+      loop->stats.queued_buffers_cur = loop->cur_level.buffers;
+      loop->stats.queued_gops_cur = gst_prerec_queued_gops(loop);
       
       GST_PREREC_MUTEX_UNLOCK(loop);
       return GST_FLOW_OK;
@@ -1190,6 +1213,26 @@ static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
 
 static gboolean gst_pre_record_loop_src_query(GstPad *pad, GstObject *parent,
                                               GstQuery *query) {
+  GstPreRecordLoop *loop = GST_PRERECORDLOOP(parent);
+  if (GST_QUERY_TYPE(query) == GST_QUERY_CUSTOM) {
+    const GstStructure *in_s = gst_query_get_structure(query);
+    if (in_s && gst_structure_has_name(in_s, "prerec-stats")) {
+      GstPreRecStats stats;
+      gst_prerec_get_stats(loop, &stats);
+      /* We can't mutate the structure name in-place easily; instead build a temp
+       * structure and insert its fields into the existing one (which already has
+       * desired name). */
+      GstStructure *w = (GstStructure*)in_s; /* cast away const for field updates */
+      gst_structure_set(w,
+        "drops-gops", G_TYPE_UINT, stats.drops_gops,
+        "drops-buffers", G_TYPE_UINT, stats.drops_buffers,
+        "drops-events", G_TYPE_UINT, stats.drops_events,
+        "queued-gops", G_TYPE_UINT, stats.queued_gops_cur,
+        "queued-buffers", G_TYPE_UINT, stats.queued_buffers_cur,
+        NULL);
+      return TRUE;
+    }
+  }
   return gst_pad_query_default(pad, parent, query);
 }
 
@@ -1406,7 +1449,8 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
   gst_element_add_pad(GST_ELEMENT(filter), filter->srcpad);
 
   filter->silent = FALSE;
-  filter->srcresult = GST_FLOW_FLUSHING;
+  /* Starting in buffering mode: accept buffers immediately */
+  filter->srcresult = GST_FLOW_OK;
 
   g_mutex_init(&filter->lock);
   g_cond_init(&filter->item_add);
@@ -1431,14 +1475,13 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
   filter->sink_tainted = filter->src_tainted = FALSE;
   
   GST_DEBUG_OBJECT(filter, "Initialized PreRecLoop");
-  // We will start in the PASSTHROUGH mode so that when we move to the PAUSED
-  // We will pre-roll the downstream elements with one frame.
-  filter->mode = GST_PREREC_MODE_PASS_THROUGH;
+  filter->mode = GST_PREREC_MODE_BUFFERING;
 
   filter->current_gop_id = 0;
   filter->gop_size = 0;
   filter->last_gop_id = 0;
   filter->num_gops = 0;
+  /* gops_in_queue removed */
   filter->preroll_sent = FALSE;
   /* init stats */
   memset(&filter->stats, 0, sizeof(filter->stats));
@@ -1446,7 +1489,7 @@ static void gst_pre_record_loop_init(GstPreRecordLoop *filter) {
   filter->flush_trigger_name = NULL;
 }
 
-void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats) {
+static void gst_prerec_get_stats(GstPreRecordLoop *loop, GstPreRecStats *out_stats) {
   g_return_if_fail(loop != NULL);
   g_return_if_fail(out_stats != NULL);
   GST_PREREC_MUTEX_LOCK(loop);

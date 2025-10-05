@@ -115,3 +115,59 @@ the plugin target, enabling:
 	- Verbose LIFE-* and STICKY-TRACK debug messages
 	- Sequenced push/unref correlation (push_seq / unref_seq) for forensic analysis
 When OFF, all tracking functions collapse to no-ops and the tables are not compiled in (zero runtime overhead).
+
+## Runtime Introspection: Custom Stats Query (Added 2025-09-28)
+
+To enable black-box verification of pruning and adaptive 2-GOP floor behavior without exposing internal symbols,
+the element implements a custom upstream query structure named `prerec-stats`.
+
+### Query Direction
+Issued downstream → upstream on the element's `src` pad (standard query flow). A test or downstream element calls:
+
+```
+GstQuery *q = gst_query_new_custom (GST_QUERY_CUSTOM,
+																		gst_structure_new_empty ("prerec-stats"));
+gst_element_query (pre_record_loop_element, q);
+const GstStructure *s = gst_query_get_structure (q);
+```
+
+### Returned Fields
+All fields are `guint` (32-bit unsigned):
+
+| Field          | Meaning                                                        |
+|----------------|----------------------------------------------------------------|
+| drops-gops     | Number of whole GOP pruning operations performed               |
+| drops-buffers  | Total individual buffers dropped as part of GOP pruning        |
+| drops-events   | Non-sticky (queued) events dropped during pruning              |
+| queued-gops    | Current number of complete GOPs resident in the buffer         |
+| queued-buffers | Current number of buffers resident (mirrors internal counter)  |
+
+### Guarantees
+1. Query is synchronous — results are valid upon return of `gst_element_query()`.
+2. Fields represent a snapshot guarded by the element's internal mutex (atomic copy semantics).
+3. `queued-gops` respects the adaptive floor: after a pruning cycle it will never report `< 2` when buffers remain.
+4. When no buffers are buffered, `queued-gops` and `queued-buffers` both return `0`.
+
+### Error Modes
+| Condition                          | Handling                                      |
+|------------------------------------|-----------------------------------------------|
+| Unsupported structure name         | Falls back to default query handling (FALSE)  |
+| Element not in PLAYING/PAUSED      | Returns current counters (may be all zero)    |
+| Memory pressure / OOM              | Query allocation failure (caller sees NULL)   |
+
+### Usage Example (C)
+```
+GstQuery *q = gst_query_new_custom (GST_QUERY_CUSTOM,
+																		gst_structure_new_empty ("prerec-stats"));
+if (gst_element_query (el, q)) {
+	const GstStructure *st = gst_query_get_structure (q);
+	guint gops=0; gst_structure_get_uint (st, "queued-gops", &gops);
+	g_print ("Current GOPs: %u\n", gops);
+}
+gst_query_unref (q);
+```
+
+### Rationale
+This approach avoids exporting internal C functions, keeps ABI surface minimal, and mirrors established GStreamer
+patterns (e.g., latency or buffering queries) for introspection. It preserves encapsulation and makes tests independent
+of internal symbol linkage changes.

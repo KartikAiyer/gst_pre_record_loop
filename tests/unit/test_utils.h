@@ -46,6 +46,10 @@ gboolean prerec_push_gop(GstElement *appsrc, guint delta_count,
 						 guint64 *pts_base_ns, guint64 duration_ns,
 						 guint64 *out_last_pts);
 
+/* Poll the prerecord element's custom stats query until conditions satisfied or timeout.
+ * Returns TRUE if (queued_gops >= min_gops && drops_gops >= min_drops_gops) met before timeout_ms elapsed. */
+gboolean prerec_wait_for_stats(GstElement *pr, guint min_gops, guint min_drops_gops, guint timeout_ms);
+
 
 /* (Optional) Attach a probe to element src pad to count buffers emitted. */
 gulong prerec_attach_count_probe(GstElement *el, guint64 *counter_out);
