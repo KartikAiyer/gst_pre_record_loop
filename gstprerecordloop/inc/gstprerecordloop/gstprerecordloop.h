@@ -91,6 +91,8 @@ typedef struct _GstPreRecStats {
   guint drops_events;     /* number of (non-sticky) events discarded during pruning */
   guint queued_gops_cur;  /* current GOPs resident (rough heuristic until full impl) */
   guint queued_buffers_cur; /* current buffer count (mirror of cur_level.buffers) */
+  guint flush_count;      /* number of accepted prerecord-flush events (T026) */
+  guint rearm_count;      /* number of prerecord-arm events processed (T026) */
 } GstPreRecStats;
 
 typedef struct _GstPreRecordLoop

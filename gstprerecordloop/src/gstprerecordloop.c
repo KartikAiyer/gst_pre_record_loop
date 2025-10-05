@@ -1137,6 +1137,8 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
       GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received flush trigger '%s'", expected);
       GST_PREREC_MUTEX_LOCK(loop);
       if (loop->mode == GST_PREREC_MODE_BUFFERING) {
+        /* Increment flush counter (T026) */
+        loop->stats.flush_count++;
         GstQueueItem *qitem;
         while ((qitem = gst_prerec_locked_dequeue(loop))) {
           if (qitem->item) {
@@ -1220,6 +1222,8 @@ static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
     if (st && gst_structure_has_name(st, "prerecord-arm")) {
       GST_PREREC_MUTEX_LOCK(loop);
       if (loop->mode == GST_PREREC_MODE_PASS_THROUGH) {
+        /* Increment rearm counter (T026) */
+        loop->stats.rearm_count++;
         loop->mode = GST_PREREC_MODE_BUFFERING;
         loop->current_gop_id = 0;
         loop->last_gop_id = 0;
@@ -1265,6 +1269,8 @@ static gboolean gst_pre_record_loop_src_query(GstPad *pad, GstObject *parent,
         "drops-events", G_TYPE_UINT, stats.drops_events,
         "queued-gops", G_TYPE_UINT, stats.queued_gops_cur,
         "queued-buffers", G_TYPE_UINT, stats.queued_buffers_cur,
+        "flush-count", G_TYPE_UINT, stats.flush_count,
+        "rearm-count", G_TYPE_UINT, stats.rearm_count,
         NULL);
       return TRUE;
     }

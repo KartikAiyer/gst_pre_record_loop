@@ -41,6 +41,7 @@ prerec_add_gst_exec_test(unit max_time_property unit/test_max_time_property.c) #
 prerec_add_gst_exec_test(unit flush_trigger_name unit/test_flush_trigger_name.c) # T020a
 prerec_add_gst_exec_test(unit no_refcount_critical unit/test_no_refcount_critical.c) # regression: ensure no refcount CRITICAL
 prerec_add_gst_exec_test(unit concurrent_flush_ignore unit/test_concurrent_flush_ignore.c) # T022
+prerec_add_gst_exec_test(unit stats_counters unit/test_stats_counters.c) # T026
 
 # Integration tests
 prerec_add_gst_exec_test(integration flush_sequence integration/test_flush_sequence.c) # T014
