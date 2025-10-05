@@ -650,10 +650,15 @@ static void locked_apply_buffer(GstPreRecordLoop *loop, GstBuffer *buffer,
   update_time_level(loop);
 }
 
-static GstQueueItem* gst_prerec_locked_dequeue(GstPreRecordLoop* loop) {
-  GstQueueItem*  qitem;
+/* Dequeue next item from queue (FR-015: avoid returning internal node pointers)
+ * Returns: TRUE if item was dequeued, FALSE if queue is empty
+ * out_item: filled with dequeued item data (copied by value to avoid pointer aliasing) */
+static gboolean gst_prerec_locked_dequeue(GstPreRecordLoop* loop, GstQueueItem *out_item) {
+  GstQueueItem*  qitem_ptr;
   GstMiniObject* item;
   gsize          buf_size;
+
+  g_return_val_if_fail(out_item != NULL, FALSE);
 
   /* Ownership model (see data-model.md: Queue Ownership):
    *  - Each GstQueueItem holds exactly one owned reference to a GstMiniObject.
@@ -666,20 +671,23 @@ static GstQueueItem* gst_prerec_locked_dequeue(GstPreRecordLoop* loop) {
    *    caller (flush/drop paths call PREREC_UNREF).
    */
 
-  qitem = gst_vec_deque_pop_head_struct(loop->queue);
-  if (qitem == NULL) {
+  qitem_ptr = gst_vec_deque_pop_head_struct(loop->queue);
+  if (qitem_ptr == NULL) {
     GST_CAT_DEBUG_OBJECT(prerec_dataflow, loop, "the prerec loop is empty");
-    return NULL;
+    return FALSE;
   }
 
-  item = qitem->item;
+  /* Copy to output parameter to avoid returning internal queue storage pointer (FR-015) */
+  *out_item = *qitem_ptr;
+  item = out_item->item;
+  buf_size = out_item->size;
+
   if (item) {
     GST_CAT_LOG_OBJECT(prerec_debug, loop,
       "DEQUEUE item=%p kind=%s ref=%d gop=%u size=%zu", item,
       GST_IS_BUFFER(item)?"buffer":(GST_IS_EVENT(item)?"event":"other"),
-      (int)GST_MINI_OBJECT_REFCOUNT_VALUE(item), qitem->gop_id, (size_t)qitem->size);
+      (int)GST_MINI_OBJECT_REFCOUNT_VALUE(item), out_item->gop_id, (size_t)out_item->size);
   }
-  buf_size = qitem->size;
 
   if (GST_IS_BUFFER(item)) {
     GstBuffer* buffer = GST_BUFFER_CAST(item);
@@ -714,12 +722,11 @@ static GstQueueItem* gst_prerec_locked_dequeue(GstPreRecordLoop* loop) {
   } else {
     g_warning("Unexpected item %p dequeued from queue %s (refcounting problem?)", item, GST_OBJECT_NAME(loop));
     PREREC_UNREF(item, "dequeue unexpected");
-    memset(qitem, 0, sizeof(GstQueueItem));
-    item = NULL;
-    qitem = NULL;
+    memset(out_item, 0, sizeof(GstQueueItem));
+    out_item->item = NULL;
   }
   GST_PREREC_SIGNAL_DEL(loop);
-  return qitem; /* caller must clear qitem->item or unref/push ownership */
+  return TRUE; /* caller must clear out_item->item or unref/push ownership */
 }
 
 static void gst_prerec_locked_flush(GstPreRecordLoop* loop, gboolean full) {
@@ -823,10 +830,10 @@ static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop* loop, gpoin
 }
 
 static void drop_last_item(GstPreRecordLoop* loop) {
-  GstQueueItem*  qitem = gst_prerec_locked_dequeue(loop);
-  if (!qitem)
+  GstQueueItem qitem; /* stack-allocated to avoid pointer aliasing (FR-015) */
+  if (!gst_prerec_locked_dequeue(loop, &qitem))
     return;
-  GstMiniObject *item = qitem->item;
+  GstMiniObject *item = qitem.item;
   if (item) {
     if (GST_IS_EVENT(item)) {
       GstEvent *event = GST_EVENT_CAST(item);
@@ -837,7 +844,7 @@ static void drop_last_item(GstPreRecordLoop* loop) {
     } else {
       PREREC_UNREF(item, "drop_last_item other");
     }
-    qitem->item = NULL;
+    qitem.item = NULL;
   }
 }
 
@@ -1072,27 +1079,27 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
     if (should_drain) {
       GST_CAT_LOG_OBJECT(prerec_dataflow, loop, 
         "EOS: draining queue (policy=%d mode=%d)", loop->flush_on_eos, loop->mode);
-      GstQueueItem *qitem;
-      while ((qitem = gst_prerec_locked_dequeue(loop))) {
-        if (qitem->item) {
-          if (GST_IS_BUFFER(qitem->item)) {
-            GstBuffer *buf = GST_BUFFER_CAST(qitem->item);
+      GstQueueItem qitem; /* stack-allocated (FR-015) */
+      while (gst_prerec_locked_dequeue(loop, &qitem)) {
+        if (qitem.item) {
+          if (GST_IS_BUFFER(qitem.item)) {
+            GstBuffer *buf = GST_BUFFER_CAST(qitem.item);
             GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
               "PUSH(EOS flush) buffer=%p ref=%d", buf,
               (int)GST_MINI_OBJECT_REFCOUNT_VALUE(buf));
             prerec_track_push(loop, GST_MINI_OBJECT_CAST(buf), FALSE, "eos-flush");
             gst_pad_push(loop->srcpad, buf); /* consumes ref */
-          } else if (GST_IS_EVENT(qitem->item)) {
-            GstEvent *ev = GST_EVENT_CAST(qitem->item);
+          } else if (GST_IS_EVENT(qitem.item)) {
+            GstEvent *ev = GST_EVENT_CAST(qitem.item);
             GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
               "PUSH(EOS flush) event=%p type=%s ref=%d", ev,
               GST_EVENT_TYPE_NAME(ev), (int)GST_MINI_OBJECT_REFCOUNT_VALUE(ev));
             prerec_track_push(loop, GST_MINI_OBJECT_CAST(ev), TRUE, "eos-flush");
             gst_pad_push_event(loop->srcpad, ev); /* consumes ref */
           } else {
-            PREREC_UNREF(qitem->item, "eos flush unknown item");
+            PREREC_UNREF(qitem.item, "eos flush unknown item");
           }
-          qitem->item = NULL;
+          qitem.item = NULL;
         }
       }
       /* Reset GOP tracking after draining queue completely */
@@ -1139,27 +1146,27 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
       if (loop->mode == GST_PREREC_MODE_BUFFERING) {
         /* Increment flush counter (T026) */
         loop->stats.flush_count++;
-        GstQueueItem *qitem;
-        while ((qitem = gst_prerec_locked_dequeue(loop))) {
-          if (qitem->item) {
-            if (GST_IS_BUFFER(qitem->item)) {
-              GstBuffer *buf = GST_BUFFER_CAST(qitem->item);
+        GstQueueItem qitem; /* stack-allocated (FR-015) */
+        while (gst_prerec_locked_dequeue(loop, &qitem)) {
+          if (qitem.item) {
+            if (GST_IS_BUFFER(qitem.item)) {
+              GstBuffer *buf = GST_BUFFER_CAST(qitem.item);
               GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
                 "PUSH(trigger flush) buffer=%p ref=%d", buf,
                 (int)GST_MINI_OBJECT_REFCOUNT_VALUE(buf));
               prerec_track_push(loop, GST_MINI_OBJECT_CAST(buf), FALSE, "trigger-flush");
               gst_pad_push(loop->srcpad, buf);
-            } else if (GST_IS_EVENT(qitem->item)) {
-              GstEvent *ev = GST_EVENT_CAST(qitem->item);
+            } else if (GST_IS_EVENT(qitem.item)) {
+              GstEvent *ev = GST_EVENT_CAST(qitem.item);
               GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
                 "PUSH(trigger flush) event=%p type=%s ref=%d", ev,
                 GST_EVENT_TYPE_NAME(ev), (int)GST_MINI_OBJECT_REFCOUNT_VALUE(ev));
               prerec_track_push(loop, GST_MINI_OBJECT_CAST(ev), TRUE, "trigger-flush");
               gst_pad_push_event(loop->srcpad, ev);
             } else {
-              PREREC_UNREF(qitem->item, "trigger flush unknown item");
+              PREREC_UNREF(qitem.item, "trigger flush unknown item");
             }
-            qitem->item = NULL;
+            qitem.item = NULL;
           }
         }
         loop->mode = GST_PREREC_MODE_PASS_THROUGH; /* marks drain complete and future triggers ignored */
