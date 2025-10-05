@@ -5,7 +5,13 @@
  * maps to internal max_size.time (in nanoseconds) with floor at 0 and
  * sub-second values rounded/clamped per later T024 refinement.
  *
- * This skeleton intentionally forces failure until the property is implemented.
+ * T024 refinement: The property is defined as g_param_spec_int, which enforces
+ * integer values at the GObject property level. This means sub-second values
+ * like 7.9 cannot be set (GObject will coerce to integer). The property
+ * description documents this as "integer-only: sub-second precision not
+ * supported (effectively floored to whole seconds)". This test validates
+ * the integer-only behavior by confirming proper set/get with whole seconds
+ * and negative value clamping.
  */
 
 #define FAIL_PREFIX "T019 FAIL (expected): "

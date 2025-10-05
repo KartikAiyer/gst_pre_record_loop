@@ -38,7 +38,7 @@
 - [X] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function) and convert T010/T011 to real assertions
 - [X] T022 Implement ignoring concurrent `prerecord-flush` when `draining == TRUE`
 - [X] T023 Implement `prerecord-arm` event handling to re-enter BUFFERING (add event name constant)
-- [ ] T024 Enforce sub-second floor behavior for `max-time` (document in property description)
+- [X] T024 Enforce sub-second floor behavior for `max-time` (document in property description)
 - [ ] T025 Update EOS handling for AUTO policy (flush only if PASS_THROUGH) (depends on T020 enum)
 - [ ] T026 Add internal counters: `gops_dropped`, `buffers_dropped`, `flush_count`, `rearm_count` (PARTIAL: drops_* already present)
 - [ ] T027 Expose debug stats via GST_INFO log on state transition

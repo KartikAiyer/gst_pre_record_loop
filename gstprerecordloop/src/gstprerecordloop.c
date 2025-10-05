@@ -1419,7 +1419,10 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
   g_object_class_install_property(
       gobject_class, PROP_MAX_TIME,
       g_param_spec_int("max-time", "Max Time (s)",
-                       "Maximum buffered duration in seconds before pruning; non-positive means unlimited",
+                       "Maximum buffered duration in whole seconds before pruning; "
+                       "non-positive means unlimited. "
+                       "Integer-only: sub-second precision not supported (effectively floored to whole seconds). "
+                       "Negative values are clamped to 0.",
                        G_MININT, /* min: allow negative so setter can clamp to 0 */
                        G_MAXINT, /* max */
                        (gint)(DEFAULT_MAX_SIZE_TIME / GST_SECOND), /* default */
