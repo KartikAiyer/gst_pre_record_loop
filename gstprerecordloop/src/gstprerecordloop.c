@@ -1095,10 +1095,21 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
           qitem->item = NULL;
         }
       }
+      /* Reset GOP tracking after draining queue completely */
+      loop->current_gop_id = loop->last_gop_id = 0;
+      /* Update stats to reflect empty queue */
+      loop->stats.queued_gops_cur = 0;
+      loop->stats.queued_buffers_cur = 0;
     } else if (!gst_vec_deque_is_empty(loop->queue)) {
       GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
         "EOS: discarding queue (policy=%d mode=%d)", loop->flush_on_eos, loop->mode);
       gst_prerec_locked_flush(loop, TRUE);
+      /* GOP IDs already reset by gst_prerec_locked_flush with full=TRUE via segment reset,
+       * but explicitly reset here for clarity */
+      loop->current_gop_id = loop->last_gop_id = 0;
+      /* Update stats to reflect empty queue */
+      loop->stats.queued_gops_cur = 0;
+      loop->stats.queued_buffers_cur = 0;
     }
     GST_PREREC_MUTEX_UNLOCK(loop);
     gst_pad_push_event(loop->srcpad, event);
