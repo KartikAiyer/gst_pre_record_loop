@@ -1163,6 +1163,13 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
           }
         }
         loop->mode = GST_PREREC_MODE_PASS_THROUGH; /* marks drain complete and future triggers ignored */
+        /* T027: Log state transition with stats snapshot */
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, 
+          "STATE TRANSITION: BUFFERING → PASS_THROUGH | "
+          "Stats: drops_gops=%u drops_buffers=%u drops_events=%u "
+          "flush_count=%u rearm_count=%u",
+          loop->stats.drops_gops, loop->stats.drops_buffers, loop->stats.drops_events,
+          loop->stats.flush_count, loop->stats.rearm_count);
         GST_CAT_INFO_OBJECT(prerec_debug, loop, "Switched to passthrough mode after trigger");
       }
       GST_PREREC_MUTEX_UNLOCK(loop);
@@ -1235,6 +1242,13 @@ static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
         loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
         loop->sink_start_time = GST_CLOCK_STIME_NONE;
         loop->sink_tainted = loop->src_tainted = FALSE;
+        /* T027: Log state transition with stats snapshot */
+        GST_CAT_INFO_OBJECT(prerec_debug, loop, 
+          "STATE TRANSITION: PASS_THROUGH → BUFFERING | "
+          "Stats: drops_gops=%u drops_buffers=%u drops_events=%u "
+          "flush_count=%u rearm_count=%u",
+          loop->stats.drops_gops, loop->stats.drops_buffers, loop->stats.drops_events,
+          loop->stats.flush_count, loop->stats.rearm_count);
         GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received prerecord-arm: re-entering BUFFERING mode");
       } else {
         GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received prerecord-arm while already BUFFERING - ignoring");
