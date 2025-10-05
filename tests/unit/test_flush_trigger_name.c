@@ -56,19 +56,32 @@ int main(int argc, char **argv) {
   if (!gst_element_send_event(tp.appsrc, ev))
     return fail("failed to send custom flush event");
 
-  /* Give a small iteration */
-  gst_bus_timed_pop_filtered(gst_element_get_bus(tp.pipeline), 100 * GST_MSECOND, GST_MESSAGE_ANY);
-
-  /* Wait briefly for flush to drain queued buffers */
+  /* Wait for flush to drain queued buffers - allow more time for all buffers to be pushed */
+  guint64 last_emitted = emitted;
+  guint stable_count = 0;
   guint attempts = 0;
-  while (attempts < 20 && emitted == baseline) {
-    gst_bus_timed_pop_filtered(gst_element_get_bus(tp.pipeline), 10 * GST_MSECOND, GST_MESSAGE_ANY);
+  
+  /* Poll until emission stabilizes (no change for several iterations) or timeout */
+  while (attempts < 100 && stable_count < 10) {
+    gst_bus_timed_pop_filtered(gst_element_get_bus(tp.pipeline), 5 * GST_MSECOND, GST_MESSAGE_ANY);
+    while (g_main_context_iteration(NULL, FALSE));
+    
+    if (emitted == last_emitted) {
+      stable_count++;
+    } else {
+      last_emitted = emitted;
+      stable_count = 0;
+    }
     attempts++;
   }
+  
   if (emitted == baseline)
     return fail("flush trigger produced no emitted buffers");
-  if (emitted - baseline < 3)
-    fprintf(stderr, "T020a WARN: expected >=3 emitted buffers after flush, got %llu (baseline=%llu)\n", (unsigned long long)emitted, (unsigned long long)baseline);
+  
+  /* We pushed 2 GOPs with 3 buffers each (keyframe + 2 deltas) = 6 total expected */
+  guint64 emitted_count = emitted - baseline;
+  if (emitted_count < 6)
+    fprintf(stderr, "T020a INFO: expected 6 emitted buffers after flush, got %llu\n", (unsigned long long)emitted_count);
 
   printf("T020a PASS: custom flush-trigger-name flushed %" G_GUINT64_FORMAT " buffers\n", emitted);
 
