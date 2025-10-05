@@ -39,6 +39,7 @@ prerec_add_gst_exec_test(unit flush_on_eos unit/test_flush_on_eos.c)        # T0
 prerec_add_gst_exec_test(unit max_time_property unit/test_max_time_property.c) # T019
 prerec_add_gst_exec_test(unit flush_trigger_name unit/test_flush_trigger_name.c) # T020a
 prerec_add_gst_exec_test(unit no_refcount_critical unit/test_no_refcount_critical.c) # regression: ensure no refcount CRITICAL
+prerec_add_gst_exec_test(unit concurrent_flush_ignore unit/test_concurrent_flush_ignore.c) # T022
 
 # Integration tests
 prerec_add_gst_exec_test(integration flush_sequence integration/test_flush_sequence.c) # T014

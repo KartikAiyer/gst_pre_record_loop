@@ -1145,7 +1145,7 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
             qitem->item = NULL;
           }
         }
-        loop->mode = GST_PREREC_MODE_PASS_THROUGH;
+        loop->mode = GST_PREREC_MODE_PASS_THROUGH; /* marks drain complete and future triggers ignored */
         GST_CAT_INFO_OBJECT(prerec_debug, loop, "Switched to passthrough mode after trigger");
       }
       GST_PREREC_MUTEX_UNLOCK(loop);

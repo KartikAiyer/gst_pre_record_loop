@@ -36,7 +36,7 @@
 - [X] T020 (Refine) Replace provisional boolean `flush-on-eos` with enum (auto/always/never) & adjust tests
 - [X] T020a Implement `flush-trigger-name` behavior validation & test using non-default value
 - [X] T021 Implement adaptive 2-GOP floor pruning logic (use existing queue + update fullness function) and convert T010/T011 to real assertions
-- [ ] T022 Implement ignoring concurrent `prerecord-flush` when `draining == TRUE`
+- [X] T022 Implement ignoring concurrent `prerecord-flush` when `draining == TRUE`
 - [ ] T023 Implement `prerecord-arm` event handling to re-enter BUFFERING (add event name constant)
 - [ ] T024 Enforce sub-second floor behavior for `max-time` (document in property description)
 - [ ] T025 Update EOS handling for AUTO policy (flush only if PASS_THROUGH) (depends on T020 enum)

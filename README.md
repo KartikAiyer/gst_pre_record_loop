@@ -184,6 +184,32 @@ To run with verbose output for a specific test:
 ctest --test-dir build/Debug -R prerec_unit_no_refcount_critical -V
 ```
 
+### Plugin Discovery (No Manual GST_PLUGIN_PATH Needed with CTest)
+
+CTest automatically injects the plugin search path for every test via the `ENVIRONMENT` property in `tests/CMakeLists.txt`:
+
+```
+ENVIRONMENT "GST_PLUGIN_PATH=$<TARGET_FILE_DIR:gstprerecordloop>:$ENV{GST_PLUGIN_PATH}"
+```
+
+Therefore you do NOT need to prefix commands with `GST_PLUGIN_PATH=…` when invoking tests through `ctest`; the plugin
+module (`libgstprerecordloop.so`) is discovered automatically.
+
+If you run a test binary directly (bypassing CTest), set the variable yourself, for example:
+
+```sh
+GST_PLUGIN_PATH=build/Debug/gstprerecordloop ./build/Debug/tests/unit_test_concurrent_flush_ignore
+```
+
+Or temporarily export:
+
+```sh
+export GST_PLUGIN_PATH="$(pwd)/build/Debug/gstprerecordloop:$GST_PLUGIN_PATH"
+./build/Debug/tests/unit_test_queue_pruning
+```
+
+If you install the plugin system-wide (e.g. into a directory already on the GStreamer plugin path), neither step is required.
+
 ## Test Execution with Debug Logging
 
 For detailed GStreamer logging during test execution:

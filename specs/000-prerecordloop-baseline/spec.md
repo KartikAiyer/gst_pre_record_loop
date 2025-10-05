@@ -171,3 +171,21 @@ gst_query_unref (q);
 This approach avoids exporting internal C functions, keeps ABI surface minimal, and mirrors established GStreamer
 patterns (e.g., latency or buffering queries) for introspection. It preserves encapsulation and makes tests independent
 of internal symbol linkage changes.
+
+## Concurrent Flush Suppression (Updated 2025-10-04 for T022)
+The implementation performs the entire drain of buffered data under the element mutex and switches the mode to
+`PASS_THROUGH` exactly once at the end of the drain. Because the second (and subsequent) `prerecord-flush` events acquire
+the mutex only after the first finishes (at which point `mode != BUFFERING`), they observe an already completed flush and
+do nothing. A separate `draining` flag was prototyped but removed as redundant for the current synchronous design.
+
+Invariant:
+BUFFERING --(flush trigger, atomic drain under lock)--> PASS_THROUGH
+
+Any additional triggers while the first holds the lock block; when they proceed they see `mode==PASS_THROUGH` and are
+ignored (early return). This satisfies the “ignore concurrent flush” requirement without extra state.
+
+Future optimization note: If draining becomes incremental or asynchronous (lock released between pushes), re-introduce
+an explicit `draining` flag to guard re-entrancy.
+
+Testing: Unit test T022 validates only one emission batch occurs and that a subsequent trigger produces no additional
+queued emission before a new live buffer arrives in pass-through mode.

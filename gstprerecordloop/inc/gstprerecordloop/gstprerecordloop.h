@@ -140,6 +140,7 @@ typedef struct _GstPreRecordLoop
   GstPreRecFlushOnEos flush_on_eos;
   gboolean preroll_sent;
 
+
   /* custom downstream event name that triggers flush (allocated) */
   gchar *flush_trigger_name;
 
