@@ -39,7 +39,7 @@
 - [X] T022 Implement ignoring concurrent `prerecord-flush` when `draining == TRUE`
 - [X] T023 Implement `prerecord-arm` event handling to re-enter BUFFERING (add event name constant)
 - [X] T024 Enforce sub-second floor behavior for `max-time` (document in property description)
-- [ ] T025 Update EOS handling for AUTO policy (flush only if PASS_THROUGH) (depends on T020 enum)
+- [X] T025 Update EOS handling for AUTO policy (flush only if PASS_THROUGH) (depends on T020 enum)
 - [ ] T026 Add internal counters: `gops_dropped`, `buffers_dropped`, `flush_count`, `rearm_count` (PARTIAL: drops_* already present)
 - [ ] T027 Expose debug stats via GST_INFO log on state transition
 - [ ] T028 Remove buffer list helpers and related dead code entirely (final pass)

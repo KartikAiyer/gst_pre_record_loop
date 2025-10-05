@@ -793,21 +793,13 @@ static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop* loop, gpoin
   GstEvent*    event = GST_EVENT_CAST(item);
 
   /* Ownership: caller passed an event we have just gst_event_ref()'d for SEGMENT/GAP in sink_event handler.
-   * For EOS we don't enqueue (handled immediately). For other serialized sticky events we only observe.
-   * Thus: every enqueued event has exactly one owned reference here. */
+   * This function only queues SEGMENT and GAP events (EOS is handled directly in sink_event handler).
+   * Every enqueued event has exactly one owned reference here. */
 
   switch (GST_EVENT_TYPE(event)) {
-  case GST_EVENT_EOS:
-    GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "got EOS from upstream");
-    if (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_ALWAYS ||
-        (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_AUTO && loop->mode == GST_PREREC_MODE_PASS_THROUGH)) {
-      gst_prerec_locked_flush(loop, FALSE);
-    }
-    loop->eos = TRUE;
-    break;
   case GST_EVENT_SEGMENT:
     locked_apply_segment(loop, event, &loop->sink_segment, TRUE);
-    /* If the queue is empty, qpply sink segment on the source */
+    /* If the queue is empty, apply sink segment on the source */
     if (gst_vec_deque_is_empty(loop->queue)) {
       GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "Apply segment on srcpad");
       locked_apply_segment(loop, event, &loop->src_segment, FALSE);
@@ -818,6 +810,8 @@ static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop* loop, gpoin
     locked_apply_gap(loop, event, &loop->sink_segment, TRUE);
     break;
   default:
+    GST_CAT_WARNING_OBJECT(prerec_dataflow, loop, 
+      "Unexpected event type %s in enqueue_event", GST_EVENT_TYPE_NAME(event));
     break;
   }
   qitem.item        = item;
@@ -1067,34 +1061,44 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
   switch (GST_EVENT_TYPE(event)) {
   case GST_EVENT_EOS:
     GST_PREREC_MUTEX_LOCK(loop);
-    if (loop->mode == GST_PREREC_MODE_BUFFERING) {
-      if (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_ALWAYS) {
-        GstQueueItem *qitem;
-        while ((qitem = gst_prerec_locked_dequeue(loop))) {
-          if (qitem->item) {
-            if (GST_IS_BUFFER(qitem->item)) {
-              GstBuffer *buf = GST_BUFFER_CAST(qitem->item);
-              GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
-                "PUSH(EOS flush) buffer=%p ref=%d", buf,
-                (int)GST_MINI_OBJECT_REFCOUNT_VALUE(buf));
-              prerec_track_push(loop, GST_MINI_OBJECT_CAST(buf), FALSE, "eos-flush");
-              gst_pad_push(loop->srcpad, buf); /* consumes ref */
-            } else if (GST_IS_EVENT(qitem->item)) {
-              GstEvent *ev = GST_EVENT_CAST(qitem->item);
-              GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
-                "PUSH(EOS flush) event=%p type=%s ref=%d", ev,
-                GST_EVENT_TYPE_NAME(ev), (int)GST_MINI_OBJECT_REFCOUNT_VALUE(ev));
-              prerec_track_push(loop, GST_MINI_OBJECT_CAST(ev), TRUE, "eos-flush");
-              gst_pad_push_event(loop->srcpad, ev); /* consumes ref */
-            } else {
-              PREREC_UNREF(qitem->item, "eos flush unknown item");
-            }
-            qitem->item = NULL;
+    /* FR-023: AUTO policy flushes remaining buffered data only if already in PASS_THROUGH;
+     * otherwise buffered data is discarded and EOS forwarded.
+     * ALWAYS: always drain queue regardless of mode
+     * NEVER: never drain, just discard and forward EOS */
+    gboolean should_drain = (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_ALWAYS ||
+                             (loop->flush_on_eos == GST_PREREC_FLUSH_ON_EOS_AUTO && 
+                              loop->mode == GST_PREREC_MODE_PASS_THROUGH));
+    
+    if (should_drain) {
+      GST_CAT_LOG_OBJECT(prerec_dataflow, loop, 
+        "EOS: draining queue (policy=%d mode=%d)", loop->flush_on_eos, loop->mode);
+      GstQueueItem *qitem;
+      while ((qitem = gst_prerec_locked_dequeue(loop))) {
+        if (qitem->item) {
+          if (GST_IS_BUFFER(qitem->item)) {
+            GstBuffer *buf = GST_BUFFER_CAST(qitem->item);
+            GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+              "PUSH(EOS flush) buffer=%p ref=%d", buf,
+              (int)GST_MINI_OBJECT_REFCOUNT_VALUE(buf));
+            prerec_track_push(loop, GST_MINI_OBJECT_CAST(buf), FALSE, "eos-flush");
+            gst_pad_push(loop->srcpad, buf); /* consumes ref */
+          } else if (GST_IS_EVENT(qitem->item)) {
+            GstEvent *ev = GST_EVENT_CAST(qitem->item);
+            GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+              "PUSH(EOS flush) event=%p type=%s ref=%d", ev,
+              GST_EVENT_TYPE_NAME(ev), (int)GST_MINI_OBJECT_REFCOUNT_VALUE(ev));
+            prerec_track_push(loop, GST_MINI_OBJECT_CAST(ev), TRUE, "eos-flush");
+            gst_pad_push_event(loop->srcpad, ev); /* consumes ref */
+          } else {
+            PREREC_UNREF(qitem->item, "eos flush unknown item");
           }
+          qitem->item = NULL;
         }
-      } else {
-        gst_prerec_locked_flush(loop, TRUE);
       }
+    } else if (!gst_vec_deque_is_empty(loop->queue)) {
+      GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+        "EOS: discarding queue (policy=%d mode=%d)", loop->flush_on_eos, loop->mode);
+      gst_prerec_locked_flush(loop, TRUE);
     }
     GST_PREREC_MUTEX_UNLOCK(loop);
     gst_pad_push_event(loop->srcpad, event);
