@@ -46,7 +46,7 @@
 - [X] T029 Update queue dequeue path to avoid freeing internal node pointers
 
 ## Phase 3.4: Integration
-- [ ] T030 Verify caps negotiation & add unit assertions (caps tests share with registration) adjust if needed
+- [X] T030 Verify caps negotiation & add unit assertions (caps tests share with registration) adjust if needed
 - [ ] T031 SEEK passthrough test + minor handling adjustments (if required)
 - [ ] T032 Validate GAP event handling (add test if missing) `tests/unit/test_gap_events.c`
 - [ ] T033 Validate sticky event propagation (segment/caps) `tests/unit/test_sticky_events.c`
