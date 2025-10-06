@@ -49,7 +49,7 @@
 - [X] T030 Verify caps negotiation & add unit assertions (caps tests share with registration) adjust if needed
 - [X] T031 SEEK passthrough test + minor handling adjustments (if required) — NOTE: PARTIAL - SEEK events pass through correctly but FLUSH_START/STOP not implemented yet (see T034a)
 - [X] T032 Validate GAP event handling (add test if missing) `tests/unit/test_gap_events.c`
-- [ ] T033 Validate sticky event propagation (segment/caps) `tests/unit/test_sticky_events.c`
+- [X] T033 Validate sticky event propagation (segment/caps) `tests/unit/test_sticky_events.c`
 
 ## Phase 3.5: Polish
 - [ ] T034 [P] Add GTK-Doc annotations for new properties & events

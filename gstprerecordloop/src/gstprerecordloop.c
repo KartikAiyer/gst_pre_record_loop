@@ -1133,8 +1133,8 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
       GST_LOG_OBJECT(loop, "Media Type: %s", media_type);
       GST_INFO_OBJECT(loop, "Received caps: %" GST_PTR_FORMAT, caps);
     }
-    /* and forward */
-    ret = gst_pad_event_default(pad, parent, event);
+    /* Forward CAPS to src pad (FR-012: sticky event propagation) */
+    ret = gst_pad_push_event(loop->srcpad, event);
     break;
   }
   /* TODO T034a: Implement FLUSH_START/FLUSH_STOP handling (FR-006)
