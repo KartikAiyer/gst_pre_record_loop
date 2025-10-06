@@ -43,6 +43,7 @@ prerec_add_gst_exec_test(unit no_refcount_critical unit/test_no_refcount_critica
 prerec_add_gst_exec_test(unit concurrent_flush_ignore unit/test_concurrent_flush_ignore.c) # T022
 prerec_add_gst_exec_test(unit stats_counters unit/test_stats_counters.c) # T026
 prerec_add_gst_exec_test(unit seek_passthrough unit/test_seek_passthrough.c) # T031
+prerec_add_gst_exec_test(unit gap_events unit/test_gap_events.c) # T032
 
 # Integration tests
 prerec_add_gst_exec_test(integration flush_sequence integration/test_flush_sequence.c) # T014
