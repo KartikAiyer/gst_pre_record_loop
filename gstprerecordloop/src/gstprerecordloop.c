@@ -44,17 +44,88 @@
 
 /**
  * SECTION:element-prerecordloop
+ * @title: PreRecordLoop
+ * @short_description: GOP-aware ring buffer for pre-event video capture
  *
- * The prerecordloop element continuously buffers encoded video data in BUFFERING mode.
- * Upon receiving a flush trigger event, it drains buffered GOPs and transitions to
- * PASS_THROUGH mode. A re-arm event returns it to BUFFERING mode.
+ * The prerecordloop element continuously buffers encoded video data in a 
+ * time-based ring buffer, preserving GOP (Group of Pictures) boundaries.
+ * It operates in two modes: BUFFERING and PASS_THROUGH.
  *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch -v -m fakesrc ! prerecordloop ! fakesink silent=TRUE
+ * ## Operating Modes
+ *
+ * - **BUFFERING Mode** (initial state): Incoming encoded video is queued in 
+ *   a ring buffer up to #GstPreRecordLoop:max-time seconds. When the buffer 
+ *   exceeds capacity, the oldest complete GOPs are dropped, always maintaining 
+ *   at least 2 complete GOPs for playback continuity.
+ *
+ * - **PASS_THROUGH Mode**: Video flows directly through without buffering. 
+ *   Entered after flush completion or when #GstPreRecordLoop:flush-on-eos 
+ *   triggers on EOS.
+ *
+ * ## Custom Events
+ *
+ * The element responds to two custom GStreamer events for external control:
+ *
+ * **prerecord-flush** (downstream custom event):
+ * Triggers flush of buffered content. When received in BUFFERING mode:
+ * - All queued GOPs are drained to downstream in order
+ * - Element transitions to PASS_THROUGH mode
+ * - Subsequent buffers flow through without queueing
+ * - Event structure name configurable via #GstPreRecordLoop:flush-trigger-name
+ * - Concurrent flush requests during drain are ignored
+ *
+ * Example: Send flush trigger from application
+ * |[<!-- language="C" -->
+ * GstStructure *s = gst_structure_new_empty("prerecord-flush");
+ * GstEvent *flush = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+ * gst_element_send_event(prerecordloop, flush);
  * ]|
- * </refsect2>
+ *
+ * **prerecord-arm** (upstream custom event):
+ * Re-arms the element back to BUFFERING mode from PASS_THROUGH:
+ * - Clears any buffered frames
+ * - Resets GOP tracking and timing state
+ * - Begins buffering incoming video again
+ * - Allows reuse of element for multiple capture events
+ *
+ * Example: Re-arm for next recording event
+ * |[<!-- language="C" -->
+ * GstStructure *s = gst_structure_new_empty("prerecord-arm");
+ * GstEvent *arm = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
+ * gst_element_send_event(prerecordloop, arm);
+ * ]|
+ *
+ * ## GOP Boundary Handling
+ *
+ * The element respects GOP boundaries for all operations:
+ * - Keyframes (non-delta-unit buffers) start new GOPs
+ * - Pruning always removes complete GOPs, never partial frames
+ * - Minimum 2-GOP retention ensures playback continuity
+ * - Even if a single GOP exceeds #GstPreRecordLoop:max-time, it's retained
+ *
+ * ## EOS Behavior
+ *
+ * End-of-stream handling is controlled by #GstPreRecordLoop:flush-on-eos:
+ * - AUTO (default): Flush only if in PASS_THROUGH mode
+ * - ALWAYS: Always flush buffered content on EOS
+ * - NEVER: Pass EOS through without flushing buffer
+ *
+ * ## Example Pipelines
+ *
+ * Basic pre-record capture:
+ * |[
+ * gst-launch-1.0 videotestsrc ! x264enc ! h264parse ! \
+ *   prerecordloop max-time=10 ! fakesink
+ * ]|
+ *
+ * Motion-triggered recording with custom flush event:
+ * |[
+ * gst-launch-1.0 v4l2src ! x264enc ! h264parse ! \
+ *   prerecordloop max-time=30 flush-trigger-name=motion-detected ! \
+ *   filesink location=output.h264
+ * ]|
+ *
+ * Since: 1.0
  */
 
 #include <gst/gstcapsfeatures.h>
@@ -1453,6 +1524,16 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
   gobject_class->set_property = gst_pre_record_loop_set_property;
   gobject_class->get_property = gst_pre_record_loop_get_property;
 
+  /**
+   * GstPreRecordLoop:silent:
+   *
+   * Enable/disable verbose output logging. When %FALSE (default), the element
+   * may produce additional debug information via GST_INFO and GST_DEBUG.
+   * When %TRUE, suppresses non-critical logging.
+   *
+   * Note: This property is legacy and may be deprecated in favor of 
+   * GST_DEBUG environment variable control.
+   */
   g_object_class_install_property(
       gobject_class, PROP_SILENT,
       g_param_spec_boolean("silent", "Silent", "Produce verbose output ?",
@@ -1460,6 +1541,20 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
 
   gobject_class->finalize = gst_pre_record_loop_finalize;
 
+  /**
+   * GstPreRecordLoop:flush-on-eos:
+   *
+   * Policy for handling buffered content when EOS (End-Of-Stream) is received.
+   *
+   * - AUTO (default): Flush buffered GOPs only if currently in PASS_THROUGH mode.
+   *   In BUFFERING mode, EOS passes through without flushing.
+   * - ALWAYS: Always drain buffered content to downstream before forwarding EOS,
+   *   regardless of current mode.
+   * - NEVER: Forward EOS immediately without flushing buffer, even in PASS_THROUGH.
+   *
+   * This allows fine control over pre-roll behavior at stream end, particularly
+   * useful for ensuring capture of trailing video in event-driven scenarios.
+   */
   g_object_class_install_property(
       gobject_class, PROP_FLUSH_ON_EOS,
       g_param_spec_enum("flush-on-eos", "Flush On EOS",
@@ -1467,12 +1562,51 @@ static void gst_pre_record_loop_class_init(GstPreRecordLoopClass *klass) {
                         GST_TYPE_PREREC_FLUSH_ON_EOS, GST_PREREC_FLUSH_ON_EOS_AUTO,
                         G_PARAM_READWRITE));
 
+  /**
+   * GstPreRecordLoop:flush-trigger-name:
+   *
+   * Customizable event structure name for the flush trigger event.
+   * Default is "prerecord-flush".
+   *
+   * When a downstream custom event with matching structure name is received,
+   * the element drains all buffered GOPs and transitions to PASS_THROUGH mode.
+   * This allows integration with application-specific event sources (motion
+   * detection, external triggers, etc.) without hardcoding event names.
+   *
+   * Example: Use custom trigger name for motion detection
+   * |[<!-- language="C" -->
+   * g_object_set(prerecordloop, "flush-trigger-name", "motion-detected", NULL);
+   * ]|
+   *
+   * Set to %NULL to use default "prerecord-flush" name.
+   */
   g_object_class_install_property(
       gobject_class, PROP_FLUSH_TRIGGER_NAME,
       g_param_spec_string("flush-trigger-name", "Flush Trigger Name",
                           "Custom downstream custom-event structure name that triggers flush (default: prerecord-flush)",
                           NULL, G_PARAM_READWRITE));
 
+  /**
+   * GstPreRecordLoop:max-time:
+   *
+   * Maximum buffered duration in whole seconds before pruning old GOPs.
+   *
+   * When the total queued time exceeds this limit, the oldest complete GOPs
+   * are dropped to maintain the time window. However, the element enforces
+   * a 2-GOP minimum floor - even if max-time is exceeded, at least 2 complete
+   * GOPs are always retained to ensure playback continuity.
+   *
+   * - Positive values: Time limit in seconds (integer only, no sub-second precision)
+   * - Zero or negative: Unlimited buffering (pruning disabled)
+   * - Sub-second values: Effectively floored to whole seconds
+   *
+   * Example: 30-second pre-roll window
+   * |[
+   * gst-launch-1.0 ... ! prerecordloop max-time=30 ! ...
+   * ]|
+   *
+   * Default: 0 (unlimited)
+   */
   g_object_class_install_property(
       gobject_class, PROP_MAX_TIME,
       g_param_spec_int("max-time", "Max Time (s)",
