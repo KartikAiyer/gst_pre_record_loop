@@ -1137,6 +1137,21 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
     ret = gst_pad_event_default(pad, parent, event);
     break;
   }
+  /* TODO T034a: Implement FLUSH_START/FLUSH_STOP handling (FR-006)
+   * FLUSH_START should:
+   *   - Clear pre-record queue (buffered frames become invalid after seek)
+   *   - Reset GOP tracking (current_gop_id, last_gop_id)
+   *   - Reset timing state and segments
+   *   - Forward event downstream
+   * FLUSH_STOP should:
+   *   - Reinitialize segments to TIME format
+   *   - Stay in current mode (BUFFERING or PASS_THROUGH)
+   *   - Forward event downstream
+   *   - Prepare to receive new SEGMENT with post-seek timeline
+   * Without this, buffered pre-seek frames will have wrong timestamps
+   * relative to post-seek incoming frames, breaking continuity.
+   * See test_seek_passthrough.c header for details.
+   */
   case GST_EVENT_CUSTOM_DOWNSTREAM: {
     const GstStructure *structure = gst_event_get_structure(event);
     const gchar *expected = loop->flush_trigger_name ? loop->flush_trigger_name : "prerecord-flush";

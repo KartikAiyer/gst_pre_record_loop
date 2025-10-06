@@ -47,12 +47,13 @@
 
 ## Phase 3.4: Integration
 - [X] T030 Verify caps negotiation & add unit assertions (caps tests share with registration) adjust if needed
-- [ ] T031 SEEK passthrough test + minor handling adjustments (if required)
+- [X] T031 SEEK passthrough test + minor handling adjustments (if required) — NOTE: PARTIAL - SEEK events pass through correctly but FLUSH_START/STOP not implemented yet (see T034a)
 - [ ] T032 Validate GAP event handling (add test if missing) `tests/unit/test_gap_events.c`
 - [ ] T033 Validate sticky event propagation (segment/caps) `tests/unit/test_sticky_events.c`
 
 ## Phase 3.5: Polish
 - [ ] T034 [P] Add GTK-Doc annotations for new properties & events
+- [ ] T034a Implement FLUSH_START/FLUSH_STOP event handling for proper seek support (FR-006) — clears queue on FLUSH_START, resets state on FLUSH_STOP
 - [ ] T035 Add README section: custom events usage, properties table synced
 - [ ] T036 [P] Add CHANGELOG entry for property + event features
 - [ ] T037 Performance measurement refinement: record median/99p latency `tests/perf/test_latency_prune.c`
