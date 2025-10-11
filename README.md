@@ -23,6 +23,111 @@ The filter is GOP aware. i.e it will always start at a key frame and when it dro
 For detailed queue ownership & refcount semantics (buffers vs SEGMENT/GAP events, sticky handling) see:
 `specs/000-prerecordloop-baseline/data-model.md` (Ownership / Refcount Semantics section).
 
+## Custom Events
+
+The `prerecordloop` element responds to two custom GStreamer events for controlling its buffering and flush behavior:
+
+### prerecord-flush (Downstream Event)
+
+**Direction**: Downstream (sent from upstream elements or application)  
+**Event Type**: `GST_EVENT_CUSTOM_DOWNSTREAM`  
+**Structure Name**: Configurable via `flush-trigger-name` property (default: `"prerecord-flush"`)
+
+**Purpose**: Triggers the element to drain all buffered GOPs and transition from BUFFERING to PASS_THROUGH mode.
+
+**Usage Example** (C API):
+```c
+GstStructure *s = gst_structure_new_empty("prerecord-flush");
+GstEvent *event = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+gst_element_send_event(pipeline, event);
+```
+
+**Behavior**:
+- If in BUFFERING mode: Drains all queued GOPs in order, then switches to PASS_THROUGH
+- If already in PASS_THROUGH: Ignored (logged at debug level)
+- If already draining from a previous flush: Ignored to prevent duplicate emission
+
+**Custom Trigger Names**:
+You can customize the event structure name for application-specific integration:
+```c
+g_object_set(prerecordloop, "flush-trigger-name", "motion-detected", NULL);
+```
+
+Then send events with matching structure name:
+```c
+GstStructure *s = gst_structure_new_empty("motion-detected");
+GstEvent *event = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+gst_element_send_event(pipeline, event);
+```
+
+### prerecord-arm (Upstream Event)
+
+**Direction**: Upstream (sent from downstream elements or application)  
+**Event Type**: `GST_EVENT_CUSTOM_UPSTREAM`  
+**Structure Name**: `"prerecord-arm"` (fixed)
+
+**Purpose**: Transitions the element from PASS_THROUGH back to BUFFERING mode to start accumulating a fresh pre-event window.
+
+**Usage Example** (C API):
+```c
+GstStructure *s = gst_structure_new_empty("prerecord-arm");
+GstEvent *event = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
+gst_element_send_event(pipeline, event);
+```
+
+**Behavior**:
+- If in PASS_THROUGH mode: Resets GOP tracking baseline and transitions to BUFFERING
+- If already in BUFFERING: Ignored (logged at INFO level)
+- Does not affect already-forwarded live data (non-destructive re-arm)
+
+**Event-Driven Recording Workflow**:
+```
+Initial: BUFFERING (accumulate pre-event window)
+    ↓
+[prerecord-flush event] → Drain buffered GOPs → PASS_THROUGH (forward live)
+    ↓
+[prerecord-arm event] → Reset baseline → BUFFERING (new window)
+    ↓
+[prerecord-flush event] → Drain → PASS_THROUGH ...
+```
+
+## Properties Reference
+
+The `prerecordloop` element exposes the following configurable properties:
+
+| Property | Type | Default | Range/Options | Description |
+|----------|------|---------|---------------|-------------|
+| `silent` | Boolean | `FALSE` | TRUE/FALSE | Suppresses non-critical logging when TRUE. Legacy property; prefer `GST_DEBUG` environment variable for runtime control. |
+| `flush-on-eos` | Enum | `AUTO` | AUTO, ALWAYS, NEVER | Policy for handling buffered content at EOS:<br>• **AUTO**: Flush only if in PASS_THROUGH mode<br>• **ALWAYS**: Always drain buffer before forwarding EOS<br>• **NEVER**: Forward EOS immediately without flushing |
+| `flush-trigger-name` | String | `"prerecord-flush"` | Any string or NULL | Custom event structure name for flush trigger. Allows integration with application-specific events (e.g., `"motion-detected"`). Set to NULL to use default. |
+| `max-time` | Integer | `10` | 0 to G_MAXINT (seconds) | Maximum buffered duration in whole seconds. When exceeded, oldest GOPs are pruned while maintaining a 2-GOP minimum floor. Zero or negative = unlimited buffering. Sub-second values are floored to whole seconds. |
+
+**Property Usage Examples**:
+
+Set maximum buffer window to 30 seconds:
+```bash
+gst-launch-1.0 ... ! prerecordloop max-time=30 ! ...
+```
+
+Configure custom flush trigger and EOS policy:
+```bash
+gst-launch-1.0 ... ! prerecordloop flush-trigger-name=motion-detected flush-on-eos=always ! ...
+```
+
+Set properties programmatically (C):
+```c
+g_object_set(G_OBJECT(prerecordloop),
+             "max-time", 15,
+             "flush-on-eos", GST_PREREC_FLUSH_ON_EOS_AUTO,
+             "flush-trigger-name", "custom-event",
+             NULL);
+```
+
+**Important Notes**:
+- `max-time` enforces a **2-GOP minimum floor**: Even if a single GOP exceeds `max-time`, it and the preceding GOP (if present) are always retained to ensure playback continuity.
+- `flush-trigger-name` must match the structure name of the custom downstream event exactly (case-sensitive).
+- All properties are readable and writable at runtime via `g_object_get/set` or GStreamer property syntax.
+
 # Test Application
 
 At this point there are no unit tests, however I have created a test application that uses my filter in a pipeline. This is found in `testapp/src/main.cc`.
