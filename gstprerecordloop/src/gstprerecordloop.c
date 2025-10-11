@@ -1213,7 +1213,7 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
   case GST_EVENT_FLUSH_START: {
     GST_CAT_INFO_OBJECT(prerec_debug, loop, "Handling FLUSH_START (mode=%s)",
                         loop->mode == GST_PREREC_MODE_BUFFERING ? "BUFFERING" : "PASS_THROUGH");
-    GST_PREREC_MUTEX_LOCK(loop)
+    GST_PREREC_MUTEX_LOCK(loop);
     
     /* Clear queue - buffered frames become invalid after seek */
     gst_prerec_locked_flush(loop, TRUE);
@@ -1321,14 +1321,28 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
     GST_PREREC_MUTEX_LOCK(loop);
     if (GST_EVENT_IS_SERIALIZED(event)) {
       if (event->type == GST_EVENT_SEGMENT || event->type == GST_EVENT_GAP) {
-        /* Ownership rationale:
+        /* T034b: Only queue SEGMENT/GAP events in BUFFERING mode.
+         * In PASS_THROUGH mode, events go directly downstream without queuing.
+         * This prevents:
+         *   - Duplicate emission (queued event + direct forward)
+         *   - Memory waste from storing unused events
+         *   - Stale events appearing after mode transitions
+         * 
+         * Ownership rationale (when queuing in BUFFERING mode):
          *  - We pass the original event to gst_pad_event_default() which will keep/use it (SEGMENT is sticky).
          *  - We also need a queued copy for deferred emission during flush/trigger.
          *  - Therefore we take an extra ref here; the queue later transfers ownership when pushing.
          *  - We never manually store sticky events ourselves (avoids double store/double unref).
          */
-        gst_event_ref(event);
-        gst_prerec_locked_enqueue_event(loop, event);
+        if (loop->mode == GST_PREREC_MODE_BUFFERING) {
+          gst_event_ref(event);
+          gst_prerec_locked_enqueue_event(loop, event);
+          GST_CAT_LOG_OBJECT(prerec_dataflow, loop, 
+            "Queued %s event in BUFFERING mode", GST_EVENT_TYPE_NAME(event));
+        } else {
+          GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
+            "Skipping queue for %s event in PASS_THROUGH mode", GST_EVENT_TYPE_NAME(event));
+        }
       } else if (GST_EVENT_IS_STICKY(event)) {
         /* Observe only; default handler performs sticky storage. */
         prerec_track_sticky(loop, event, "observe-serialized-sticky");

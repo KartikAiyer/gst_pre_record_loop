@@ -46,6 +46,7 @@ prerec_add_gst_exec_test(unit seek_passthrough unit/test_seek_passthrough.c) # T
 prerec_add_gst_exec_test(unit gap_events unit/test_gap_events.c) # T032
 prerec_add_gst_exec_test(unit sticky_events unit/test_sticky_events.c) # T033
 prerec_add_gst_exec_test(unit flush_seek_reset unit/test_flush_seek_reset.c) # T034a
+prerec_add_gst_exec_test(unit passthrough_event_queuing unit/test_passthrough_event_queuing.c) # T034b
 
 # Integration tests
 prerec_add_gst_exec_test(integration flush_sequence integration/test_flush_sequence.c) # T014

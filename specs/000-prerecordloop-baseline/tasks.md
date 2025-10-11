@@ -54,7 +54,7 @@
 ## Phase 3.5: Polish
 - [X] T034 [P] Add GTK-Doc annotations for new properties & events
 - [X] T034a Implement FLUSH_START/FLUSH_STOP event handling for proper seek support (FR-006) — clears queue on FLUSH_START, resets state on FLUSH_STOP
-- [ ] T034b Fix SEGMENT/GAP event queuing in PASS_THROUGH mode — events should only be queued in BUFFERING mode, not PASS_THROUGH (prevents duplicate emission and memory waste)
+- [X] T034b Fix SEGMENT/GAP event queuing in PASS_THROUGH mode — events should only be queued in BUFFERING mode, not PASS_THROUGH (prevents duplicate emission and memory waste)
 - [ ] T035 Add README section: custom events usage, properties table synced
 - [ ] T036 [P] Add CHANGELOG entry for property + event features
 - [ ] T037 Performance measurement refinement: record median/99p latency `tests/perf/test_latency_prune.c`

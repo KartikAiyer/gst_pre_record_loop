@@ -170,10 +170,9 @@ int main(int argc, char *argv[]) {
   /* Test 3: GAP events pass through in PASS_THROUGH mode */
   g_print("T032: Test 3 - GAP events pass through in PASS_THROUGH mode\n");
   
-  /* NOTE: Current implementation queues GAP events even in PASS_THROUGH mode.
-   * This is technically unnecessary since PASS_THROUGH means we're not buffering,
-   * but it doesn't break functionality - the events just sit in the queue unused
-   * until re-arm. This could be optimized in the future. */
+  /* T034b: GAP events are NOT queued in PASS_THROUGH mode - they go
+   * directly downstream without being stored in the queue. This prevents
+   * duplicate emission and memory waste. */
   
   gap_events_received = 0;
   gap_event = gst_event_new_gap(5 * GST_SECOND, GST_SECOND);
@@ -292,17 +291,18 @@ int main(int argc, char *argv[]) {
   
   g_usleep(200000); /* 200ms for flush */
   
-  /* GAP should have been emitted during flush (between the two GOPs)
-   * NOTE: We expect 2 GAP events because the element currently queues GAP events
-   * even in PASS_THROUGH mode. So we get:
-   * 1. The GAP from Test 3 (5s duration 1s) - queued in PASS_THROUGH, still in queue after rearm
-   * 2. The GAP from Test 4 (2s duration 2s) - queued in BUFFERING mode
-   * This is not ideal but doesn't break functionality. */
-  if (gap_events_received != 2) {
+  /* T034b fix: GAP events are now only queued in BUFFERING mode.
+   * Therefore we expect only 1 GAP event during flush:
+   * - The GAP from Test 4 (2s duration 2s) - queued in BUFFERING mode
+   * 
+   * The GAP from Test 3 (sent in PASS_THROUGH mode) correctly passed through
+   * immediately and was NOT queued, so it won't appear again during flush.
+   * This is the correct behavior per T034b. */
+  if (gap_events_received != 1) {
     gst_object_unref(sink);
     gst_object_unref(src);
     prerec_pipeline_shutdown(&p);
-    FAIL("GAP events not emitted during flush with correct timing (got %d, expected 2)",
+    FAIL("GAP events not emitted during flush with correct timing (got %d, expected 1)",
          gap_events_received);
   }
   
