@@ -1208,21 +1208,65 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
     ret = gst_pad_push_event(loop->srcpad, event);
     break;
   }
-  /* TODO T034a: Implement FLUSH_START/FLUSH_STOP handling (FR-006)
-   * FLUSH_START should:
-   *   - Clear pre-record queue (buffered frames become invalid after seek)
-   *   - Reset GOP tracking (current_gop_id, last_gop_id)
-   *   - Reset timing state and segments
-   *   - Forward event downstream
-   * FLUSH_STOP should:
-   *   - Reinitialize segments to TIME format
-   *   - Stay in current mode (BUFFERING or PASS_THROUGH)
-   *   - Forward event downstream
-   *   - Prepare to receive new SEGMENT with post-seek timeline
-   * Without this, buffered pre-seek frames will have wrong timestamps
-   * relative to post-seek incoming frames, breaking continuity.
-   * See test_seek_passthrough.c header for details.
-   */
+  
+  /* T034a: FLUSH_START/FLUSH_STOP handling (FR-006) */
+  case GST_EVENT_FLUSH_START: {
+    GST_CAT_INFO_OBJECT(prerec_debug, loop, "Handling FLUSH_START (mode=%s)",
+                        loop->mode == GST_PREREC_MODE_BUFFERING ? "BUFFERING" : "PASS_THROUGH");
+    GST_PREREC_MUTEX_LOCK(loop)
+    
+    /* Clear queue - buffered frames become invalid after seek */
+    gst_prerec_locked_flush(loop, TRUE);
+    
+    /* Reset GOP tracking */
+    loop->current_gop_id = 0;
+    loop->last_gop_id = 0;
+    
+    /* Reset stats counters for queue state */
+    loop->stats.queued_gops_cur = 0;
+    loop->stats.queued_buffers_cur = 0;
+    
+    /* Set srcresult to FLUSHING to stop any pending operations */
+    loop->srcresult = GST_FLOW_FLUSHING;
+    
+    GST_PREREC_MUTEX_UNLOCK(loop);
+    
+    /* Forward FLUSH_START downstream */
+    ret = gst_pad_push_event(loop->srcpad, event);
+    GST_CAT_INFO_OBJECT(prerec_debug, loop, "Forwarded FLUSH_START downstream (ret=%d)", ret);
+    break;
+  }
+  
+  case GST_EVENT_FLUSH_STOP: {
+    gboolean reset_time;
+    gst_event_parse_flush_stop(event, &reset_time);
+    
+    GST_CAT_INFO_OBJECT(prerec_debug, loop, "Handling FLUSH_STOP (reset_time=%d mode=%s)",
+                        reset_time, loop->mode == GST_PREREC_MODE_BUFFERING ? "BUFFERING" : "PASS_THROUGH");
+    GST_PREREC_MUTEX_LOCK(loop);
+    
+    /* Reset srcresult to OK - ready to accept new data */
+    loop->srcresult = GST_FLOW_OK;
+    
+    /* Reinitialize segments to TIME format if reset_time is TRUE */
+    if (reset_time) {
+      gst_segment_init(&loop->sink_segment, GST_FORMAT_TIME);
+      gst_segment_init(&loop->src_segment, GST_FORMAT_TIME);
+      loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
+      loop->sink_start_time = GST_CLOCK_STIME_NONE;
+      loop->sink_tainted = loop->src_tainted = FALSE;
+    }
+    
+    /* Mode stays the same (BUFFERING or PASS_THROUGH) */
+    
+    GST_PREREC_MUTEX_UNLOCK(loop);
+    
+    /* Forward FLUSH_STOP downstream */
+    ret = gst_pad_push_event(loop->srcpad, event);
+    GST_CAT_INFO_OBJECT(prerec_debug, loop, "Forwarded FLUSH_STOP downstream (ret=%d, reset_time=%d)", ret, reset_time);
+    break;
+  }
+  
   case GST_EVENT_CUSTOM_DOWNSTREAM: {
     const GstStructure *structure = gst_event_get_structure(event);
     const gchar *expected = loop->flush_trigger_name ? loop->flush_trigger_name : "prerecord-flush";
