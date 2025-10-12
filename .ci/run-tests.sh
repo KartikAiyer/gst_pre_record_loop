@@ -86,17 +86,60 @@ configure_build_test conan-debug
 conan_preset Release
 configure_build_test conan-release || echo "[CI][WARN] Release preset not found yet (no preset file)"
 
-# Style / formatting check (non-blocking now, can be enforced later)
+# T040: Code style check with clang-format
+# Set ENFORCE_STYLE=1 to make style violations fail the CI
+ENFORCE_STYLE="${ENFORCE_STYLE:-0}"
+
 if command -v clang-format >/dev/null 2>&1; then
-  echo "[CI] Running clang-format style probe"
-  CF_CHANGED=$(git ls-files '*.c' '*.h' | xargs -I{} bash -c 'diff -u <(cat {}) <(clang-format {}) || true' | wc -l | tr -d ' ')
-  if [[ "$CF_CHANGED" -gt 0 ]]; then
-    echo "[CI][WARN] clang-format suggests changes (enable enforcement later)"
+  echo "[CI] Running clang-format style check (enforce=${ENFORCE_STYLE})"
+  
+  # Check for .clang-format config
+  if [[ ! -f "$ROOT_DIR/.clang-format" ]]; then
+    echo "[CI][WARN] .clang-format not found; using clang-format defaults"
+  fi
+  
+  # Find all C/C++ source and header files
+  STYLE_FILES=$(git ls-files '*.c' '*.h' '*.cc' '*.cpp' '*.hpp' 2>/dev/null || find . -name '*.c' -o -name '*.h')
+  
+  if [[ -z "$STYLE_FILES" ]]; then
+    echo "[CI][WARN] No source files found for style check"
   else
-    echo "[CI] Style clean"
+    # Check each file for formatting differences
+    STYLE_VIOLATIONS=0
+    VIOLATING_FILES=()
+    
+    while IFS= read -r file; do
+      if [[ -f "$file" ]]; then
+        # Compare formatted vs actual
+        if ! diff -q "$file" <(clang-format "$file") >/dev/null 2>&1; then
+          STYLE_VIOLATIONS=$((STYLE_VIOLATIONS + 1))
+          VIOLATING_FILES+=("$file")
+        fi
+      fi
+    done <<< "$STYLE_FILES"
+    
+    # Report results
+    if [[ $STYLE_VIOLATIONS -eq 0 ]]; then
+      echo "[CI] ✓ Style check passed: All files conform to .clang-format"
+    else
+      echo "[CI][STYLE] Found $STYLE_VIOLATIONS file(s) with formatting issues:"
+      for file in "${VIOLATING_FILES[@]}"; do
+        echo "[CI][STYLE]   - $file"
+      done
+      echo "[CI][STYLE] To fix: clang-format -i <file>"
+      echo "[CI][STYLE] To fix all: git ls-files '*.c' '*.h' | xargs clang-format -i"
+      
+      if [[ "$ENFORCE_STYLE" == "1" ]]; then
+        echo "[CI][ERROR] Style enforcement enabled; failing build due to formatting violations" >&2
+        exit 1
+      else
+        echo "[CI][WARN] Style violations detected (non-blocking; set ENFORCE_STYLE=1 to enforce)"
+      fi
+    fi
   fi
 else
   echo "[CI][WARN] clang-format not found; skipping style check"
+  echo "[CI][WARN] Install with: brew install clang-format (macOS) or apt-get install clang-format (Linux)"
 fi
 
-echo "[CI] Completed CI script"
+echo "[CI] Completed CI script successfully"

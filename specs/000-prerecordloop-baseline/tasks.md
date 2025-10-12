@@ -60,7 +60,7 @@
 - [X] T037 Performance measurement refinement: record median/99p latency `tests/perf/test_latency_prune.c`
 - [X] T038 [P] Add metric logging toggle (maybe property or debug env var) (optional)
 - [ ] T039 Run valgrind full leak test & fix issues (update `tests/memory/test_leaks.sh`)
-- [ ] T040 Add code style check invocation to CI script `.ci/run-tests.sh`
+- [X] T040 Add code style check invocation to CI script `.ci/run-tests.sh`
 
 ## Dependencies
 - Setup (T001-T008) before tests.
