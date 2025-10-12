@@ -10,7 +10,7 @@ on:
 jobs:
   valgrind-linux:
     name: Valgrind on Ubuntu x86_64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Use Ubuntu 24.04 for GStreamer 1.24+
     
     steps:
       - name: Checkout code
@@ -29,6 +29,16 @@ jobs:
             gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
             python3-pip
+      
+      - name: Check GStreamer version
+        run: |
+          GST_VERSION=$(pkg-config --modversion gstreamer-1.0)
+          echo "GStreamer version: $GST_VERSION"
+          # Verify GStreamer >= 1.24 (required for GstVecDeque)
+          if ! pkg-config --atleast-version=1.24 gstreamer-1.0; then
+            echo "Error: GStreamer 1.24+ required (found $GST_VERSION)"
+            exit 1
+          fi
       
       - name: Install Conan
         run: |

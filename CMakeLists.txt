@@ -45,9 +45,12 @@ message("PKG_CONFIG_PATH is set to: ${NEW_PKG_CONFIG_PATH}")
 
 # Find Package Config
 find_package(PkgConfig REQUIRED)
-# Find GStreamer
-#find_package(gstreamer REQUIRED)
-pkg_check_modules(gstreamer REQUIRED IMPORTED_TARGET gstreamer-1.0)
+# Find GStreamer (require 1.24+ for GstVecDeque support)
+pkg_check_modules(gstreamer REQUIRED IMPORTED_TARGET gstreamer-1.0>=1.24)
+if(gstreamer_VERSION VERSION_LESS "1.24")
+  message(FATAL_ERROR "GStreamer 1.24 or newer required (found ${gstreamer_VERSION}). GstVecDeque API required.")
+endif()
+message(STATUS "Found GStreamer ${gstreamer_VERSION}")
 find_package(spdlog REQUIRED)
 
 add_subdirectory(gstprerecordloop)

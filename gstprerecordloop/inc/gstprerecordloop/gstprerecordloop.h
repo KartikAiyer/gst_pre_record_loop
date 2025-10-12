@@ -48,6 +48,7 @@
 #define __GST_PRERECORDLOOP_H__
 
 #include <gst/gst.h>
+#include <gst/gstvecdeque.h>
 
 G_BEGIN_DECLS
 
