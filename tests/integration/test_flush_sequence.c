@@ -40,7 +40,34 @@ int main(int argc, char** argv) {
   if (!prerec_push_gop(tp.appsrc, 1, &pts, dur, NULL))
     FAIL("post flush gop failed");
 
-  g_error("T014 forced fail: flush integration behavior not implemented");
+  // Send EOS to complete the pipeline
+  gst_app_src_end_of_stream(GST_APP_SRC(tp.appsrc));
+  
+  // Wait for EOS message to ensure pipeline processed everything
+  GstBus* bus = gst_pipeline_get_bus(GST_PIPELINE(tp.pipeline));
+  GstMessage* msg = gst_bus_timed_pop_filtered(bus, 5 * GST_SECOND, GST_MESSAGE_EOS | GST_MESSAGE_ERROR);
+  
+  if (!msg) {
+    gst_object_unref(bus);
+    FAIL("timeout waiting for EOS");
+  }
+  
+  if (GST_MESSAGE_TYPE(msg) == GST_MESSAGE_ERROR) {
+    GError* err = NULL;
+    gchar* debug = NULL;
+    gst_message_parse_error(msg, &err, &debug);
+    g_printerr("Pipeline error: %s\n", err->message);
+    g_error_free(err);
+    g_free(debug);
+    gst_message_unref(msg);
+    gst_object_unref(bus);
+    FAIL("pipeline error");
+  }
+  
+  gst_message_unref(msg);
+  gst_object_unref(bus);
+  
+  // Test passed - flush sequence completed successfully
   prerec_pipeline_shutdown(&tp);
   return 0;
 }

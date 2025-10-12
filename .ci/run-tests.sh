@@ -83,7 +83,8 @@ check_code_style() {
 # Run conan install only if the corresponding build/generators directory is missing
 conan_preset() {
   local build_type="$1" # Debug or Release
-  local preset_name="conan-${build_type,,}" # lower-case
+  # local preset_name="conan-${build_type,,}" # lower-case
+  local preset_name="conan-$(echo "$build_type" | tr '[:upper:]' '[:lower:]')"
   local gen_dir="$ROOT_DIR/build/$build_type/generators"
   if [[ ! -d "$gen_dir" ]]; then
     echo "[CI] Running Conan install for $build_type (generators missing)"
@@ -101,7 +102,7 @@ conan_preset() {
 configure_build_test() {
   local preset="$1" # e.g. conan-debug
   local build_dir_suffix="${preset#conan-}" # debug or release
-  local upper_dir="${build_dir_suffix^}"   # capitalize first letter
+  local upper_dir="$(printf '%s%s' "${build_dir_suffix:0:1}" | tr '[:lower:]' '[:upper:]')${build_dir_suffix:1}"
   echo "[CI] Configuring ($preset)"
   cmake --preset="$preset"
   echo "[CI] Building ($preset)"
