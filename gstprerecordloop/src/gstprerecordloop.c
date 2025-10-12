@@ -198,6 +198,19 @@ GST_DEBUG_CATEGORY_STATIC(prerec_debug);
 #define GST_CAT_DEFAULT prerec_debug
 GST_DEBUG_CATEGORY_STATIC(prerec_dataflow);
 
+/* T038: Optional metric logging toggle via environment variable */
+static gboolean prerec_metrics_enabled = FALSE;
+
+static inline gboolean prerec_metrics_are_enabled(void) {
+  static gboolean checked = FALSE;
+  if (!checked) {
+    const gchar *env = g_getenv("GST_PREREC_METRICS");
+    prerec_metrics_enabled = (env && (g_strcmp0(env, "1") == 0 || g_ascii_strcasecmp(env, "true") == 0));
+    checked = TRUE;
+  }
+  return prerec_metrics_enabled;
+}
+
 /* Filter signals and args */
 enum {
   /* FILL ME */
@@ -1017,6 +1030,16 @@ static void gst_prerec_locked_drop(GstPreRecordLoop *loop) {
   loop->stats.queued_buffers_cur = loop->cur_level.buffers;
   if (loop->current_gop_id >= loop->last_gop_id)
     loop->stats.queued_gops_cur = loop->current_gop_id - loop->last_gop_id + 1;
+  
+  /* T038: Optional metric logging for production monitoring */
+  if (G_UNLIKELY(prerec_metrics_are_enabled())) {
+    GST_INFO_OBJECT(loop, "[METRIC] Pruning: dropped_gop_count=1 "
+                    "dropped_buffers=%d dropped_events=%d queued_gops=%u queued_buffers=%u "
+                    "total_drops_gops=%u total_drops_buffers=%u",
+                    buffers_dropped, events_dropped,
+                    loop->stats.queued_gops_cur, loop->stats.queued_buffers_cur,
+                    loop->stats.drops_gops, loop->stats.drops_buffers);
+  }
 }
 
 /* Heuristic GOP count: relies on invariants that queue always begins at a
@@ -1307,6 +1330,14 @@ static gboolean gst_pre_record_loop_sink_event(GstPad *pad, GstObject *parent,
           "flush_count=%u rearm_count=%u",
           loop->stats.drops_gops, loop->stats.drops_buffers, loop->stats.drops_events,
           loop->stats.flush_count, loop->stats.rearm_count);
+        
+        /* T038: Optional metric logging for production monitoring */
+        if (G_UNLIKELY(prerec_metrics_are_enabled())) {
+          GST_INFO_OBJECT(loop, "[METRIC] Mode transition: BUFFERING -> PASS_THROUGH "
+                          "flush_count=%u queued_gops=%u queued_buffers=%u",
+                          loop->stats.flush_count, loop->stats.queued_gops_cur,
+                          loop->stats.queued_buffers_cur);
+        }
         GST_CAT_INFO_OBJECT(prerec_debug, loop, "Switched to passthrough mode after trigger");
       }
       GST_PREREC_MUTEX_UNLOCK(loop);
@@ -1400,6 +1431,13 @@ static gboolean gst_pre_record_loop_src_event(GstPad *pad, GstObject *parent,
           "flush_count=%u rearm_count=%u",
           loop->stats.drops_gops, loop->stats.drops_buffers, loop->stats.drops_events,
           loop->stats.flush_count, loop->stats.rearm_count);
+        
+        /* T038: Optional metric logging for production monitoring */
+        if (G_UNLIKELY(prerec_metrics_are_enabled())) {
+          GST_INFO_OBJECT(loop, "[METRIC] Mode transition: PASS_THROUGH -> BUFFERING "
+                          "rearm_count=%u gop_baseline_reset=TRUE",
+                          loop->stats.rearm_count);
+        }
         GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received prerecord-arm: re-entering BUFFERING mode");
       } else {
         GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received prerecord-arm while already BUFFERING - ignoring");

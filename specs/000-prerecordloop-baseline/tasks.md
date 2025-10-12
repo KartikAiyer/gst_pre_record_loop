@@ -57,8 +57,8 @@
 - [X] T034b Fix SEGMENT/GAP event queuing in PASS_THROUGH mode — events should only be queued in BUFFERING mode, not PASS_THROUGH (prevents duplicate emission and memory waste)
 - [X] T035 Add README section: custom events usage, properties table synced
 - [X] T036 [P] Add CHANGELOG entry for property + event features
-- [ ] T037 Performance measurement refinement: record median/99p latency `tests/perf/test_latency_prune.c`
-- [ ] T038 [P] Add metric logging toggle (maybe property or debug env var) (optional)
+- [X] T037 Performance measurement refinement: record median/99p latency `tests/perf/test_latency_prune.c`
+- [X] T038 [P] Add metric logging toggle (maybe property or debug env var) (optional)
 - [ ] T039 Run valgrind full leak test & fix issues (update `tests/memory/test_leaks.sh`)
 - [ ] T040 Add code style check invocation to CI script `.ci/run-tests.sh`
 
