@@ -90,14 +90,21 @@ The output file `output_prerecord.mp4` contains **581 frames** (19.37 seconds):
 # Build the test application
 cmake --build build/Debug --target prerec --parallel 6
 
+# Set GST_PLUGIN_PATH to include the prerecordloop plugin
+export GST_PLUGIN_PATH="$(pwd)/build/Debug/gstprerecordloop:$GST_PLUGIN_PATH"
+
+# Verify plugin is discoverable
+gst-inspect-1.0 pre_record_loop
+
 # Run the application
 cd build/Debug/testapp
 ./prerec.app/Contents/MacOS/prerec
 ```
 
+**Note**: The test application relies on `GST_PLUGIN_PATH` environment variable to locate the `prerecordloop` plugin. Make sure to set it before running the application.
+
 ### Expected Console Output
 ```
-Plugin loaded successfully
 Successfully obtained prerecordloop element reference
 Successfully obtained videotestsrc element reference
 Added frame counter probe to videotestsrc src pad
