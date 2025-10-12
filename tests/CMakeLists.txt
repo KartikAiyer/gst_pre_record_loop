@@ -56,5 +56,11 @@ prerec_add_gst_exec_test(integration oversize_gop integration/test_oversize_gop.
 # Perf tests
 prerec_add_gst_exec_test(perf latency_prune perf/test_latency_prune.c)                 # T017
 
-# Memory Test: leak baseline script (T018 - expected failing)
+# Memory Test: leak detection (T039)
+# - macOS: Uses native 'leaks' tool from Xcode
+# - Linux: Redirects to test_leaks_valgrind.sh (Valgrind-based)
+# - Other: Refcount validation tests only
 add_test(NAME prerec_memory_leak_baseline COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/memory/test_leaks.sh)
+set_tests_properties(prerec_memory_leak_baseline PROPERTIES
+  ENVIRONMENT "GST_PLUGIN_PATH=$<TARGET_FILE_DIR:gstprerecordloop>:$ENV{GST_PLUGIN_PATH}"
+  TIMEOUT 120)  # Allow time for leak detection
