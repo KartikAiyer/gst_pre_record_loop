@@ -1,5 +1,5 @@
 /* T012: Validate flush → re-arm → buffer cycle with emission counting.
- * 
+ *
  * Test Flow:
  *   Phase 1 (Buffering): Push 3 GOPs → expect 0 emissions (buffered)
  *   Phase 2 (First Flush): Send flush → expect 9 buffers emitted (3 GOPs × 3 buffers each)
@@ -14,44 +14,49 @@
 #include <gst/app/gstappsrc.h>
 #include <stdio.h>
 
-static gboolean send_flush(GstElement *pr) {
-  GstStructure *s = gst_structure_new_empty("prerecord-flush");
-  GstEvent *ev = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+static gboolean send_flush(GstElement* pr) {
+  GstStructure* s  = gst_structure_new_empty("prerecord-flush");
+  GstEvent*     ev = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
-static gboolean send_rearm(GstElement *pr) {
-  GstStructure *s = gst_structure_new_empty("prerecord-arm");
-  GstEvent *ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
+static gboolean send_rearm(GstElement* pr) {
+  GstStructure* s  = gst_structure_new_empty("prerecord-arm");
+  GstEvent*     ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
 
 /* Wait for emission count to stabilize (no change for stable_threshold consecutive checks) */
-static void wait_for_stable_emission(GstElement *pipeline, guint64 *emitted, guint stable_threshold, guint max_attempts) {
-  guint64 last = *emitted;
-  guint stable = 0;
+static void wait_for_stable_emission(GstElement* pipeline, guint64* emitted, guint stable_threshold,
+                                     guint max_attempts) {
+  guint64 last   = *emitted;
+  guint   stable = 0;
   for (guint i = 0; i < max_attempts && stable < stable_threshold; ++i) {
     gst_bus_timed_pop_filtered(gst_element_get_bus(pipeline), 5 * GST_MSECOND, GST_MESSAGE_ANY);
-    while (g_main_context_iteration(NULL, FALSE));
+    while (g_main_context_iteration(NULL, FALSE))
+      ;
     if (*emitted == last) {
       stable++;
     } else {
-      last = *emitted;
+      last   = *emitted;
       stable = 0;
     }
   }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   prerec_test_init(&argc, &argv);
-  if (!prerec_factory_available()) FAIL("factory not available");
+  if (!prerec_factory_available())
+    FAIL("factory not available");
   PrerecTestPipeline tp;
-  if (!prerec_pipeline_create(&tp, "t012-emission")) FAIL("pipeline creation failed");
+  if (!prerec_pipeline_create(&tp, "t012-emission"))
+    FAIL("pipeline creation failed");
 
-  guint64 emitted = 0;
-  gulong probe_id = prerec_attach_count_probe(tp.pr, &emitted);
-  if (!probe_id) FAIL("failed to attach emission probe");
+  guint64 emitted  = 0;
+  gulong  probe_id = prerec_attach_count_probe(tp.pr, &emitted);
+  if (!probe_id)
+    FAIL("failed to attach emission probe");
 
-  guint64 ts = 0;
+  guint64       ts    = 0;
   const guint64 delta = GST_SECOND;
 
   /* === PHASE 1: Initial buffering (3 GOPs, expect 0 emissions) === */
@@ -62,15 +67,16 @@ int main(int argc, char **argv) {
   }
   wait_for_stable_emission(tp.pipeline, &emitted, 10, 50);
   if (emitted != 0)
-    FAIL("phase1 expected 0 emissions (buffering), got %llu", (unsigned long long)emitted);
+    FAIL("phase1 expected 0 emissions (buffering), got %llu", (unsigned long long) emitted);
   g_print("T012: Phase 1 ✓ - 0 emissions (buffers queued)\n");
 
   /* === PHASE 2: First flush (expect 9 buffers: 3 GOPs × 3 buffers) === */
   g_print("T012: Phase 2 - Sending first flush...\n");
-  if (!send_flush(tp.pr)) FAIL("phase2: flush send failed");
+  if (!send_flush(tp.pr))
+    FAIL("phase2: flush send failed");
   wait_for_stable_emission(tp.pipeline, &emitted, 10, 100);
   if (emitted != 9)
-    FAIL("phase2 expected 9 emissions (3 GOPs), got %llu", (unsigned long long)emitted);
+    FAIL("phase2 expected 9 emissions (3 GOPs), got %llu", (unsigned long long) emitted);
   g_print("T012: Phase 2 ✓ - 9 buffers flushed\n");
 
   /* === PHASE 3: Pass-through (push 1 GOP, expect immediate emission of 2 buffers) === */
@@ -81,32 +87,34 @@ int main(int argc, char **argv) {
   wait_for_stable_emission(tp.pipeline, &emitted, 10, 50);
   guint64 passthrough_emitted = emitted - before_passthrough;
   if (passthrough_emitted != 2)
-    FAIL("phase3 expected 2 emissions (pass-through), got %llu", (unsigned long long)passthrough_emitted);
+    FAIL("phase3 expected 2 emissions (pass-through), got %llu", (unsigned long long) passthrough_emitted);
   g_print("T012: Phase 3 ✓ - 2 buffers emitted immediately (pass-through)\n");
 
   /* === PHASE 4: Re-arm + buffer (push 1 GOP, expect 0 new emissions) === */
   g_print("T012: Phase 4 - Sending re-arm and pushing 1 GOP...\n");
-  if (!send_rearm(tp.pr)) FAIL("phase4: rearm send failed");
+  if (!send_rearm(tp.pr))
+    FAIL("phase4: rearm send failed");
   guint64 before_rearm = emitted;
   if (!prerec_push_gop(tp.appsrc, 2, &ts, delta, NULL))
     FAIL("phase4: post-rearm push failed");
   wait_for_stable_emission(tp.pipeline, &emitted, 10, 50);
   guint64 rearm_emitted = emitted - before_rearm;
   if (rearm_emitted != 0)
-    FAIL("phase4 expected 0 emissions (buffering after re-arm), got %llu", (unsigned long long)rearm_emitted);
+    FAIL("phase4 expected 0 emissions (buffering after re-arm), got %llu", (unsigned long long) rearm_emitted);
   g_print("T012: Phase 4 ✓ - 0 emissions (buffering resumed)\n");
 
   /* === PHASE 5: Second flush (expect 3 buffers: 1 GOP × 3 buffers) === */
   g_print("T012: Phase 5 - Sending second flush...\n");
   guint64 before_flush2 = emitted;
-  if (!send_flush(tp.pr)) FAIL("phase5: second flush send failed");
+  if (!send_flush(tp.pr))
+    FAIL("phase5: second flush send failed");
   wait_for_stable_emission(tp.pipeline, &emitted, 10, 100);
   guint64 flush2_emitted = emitted - before_flush2;
   if (flush2_emitted != 3)
-    FAIL("phase5 expected 3 emissions (1 GOP), got %llu", (unsigned long long)flush2_emitted);
+    FAIL("phase5 expected 3 emissions (1 GOP), got %llu", (unsigned long long) flush2_emitted);
   g_print("T012: Phase 5 ✓ - 3 buffers flushed\n");
 
-  g_print("T012 PASS: Complete re-arm cycle validated (total %llu emissions)\n", (unsigned long long)emitted);
+  g_print("T012 PASS: Complete re-arm cycle validated (total %llu emissions)\n", (unsigned long long) emitted);
   prerec_remove_probe(tp.pr, probe_id);
   prerec_pipeline_shutdown(&tp);
   return 0;

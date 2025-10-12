@@ -4,7 +4,7 @@
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
  * Copyright (C) 2020 Niels De Graef <niels.degraef@gmail.com>
  * Copyright (C) 2025  <<user@hostname.org>>
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -59,75 +59,66 @@ typedef enum {
 } GstPreRecFlushOnEos;
 
 #define GST_TYPE_PREREC_FLUSH_ON_EOS (gst_prerec_flush_on_eos_get_type())
-GType gst_prerec_flush_on_eos_get_type (void);
+GType gst_prerec_flush_on_eos_get_type(void);
 
 #define GST_TYPE_PRERECORDLOOP (gst_pre_record_loop_get_type())
-G_DECLARE_FINAL_TYPE (GstPreRecordLoop, gst_pre_record_loop,
-    GST, PRERECORDLOOP, GstElement)
-#define GST_PRERECLOOP(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_PRERECORDLOOP, GstPreRecordLoop))
-#define GST_PRERECLOOP_CLASS(klass)\
-  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_PRERECORDLOOP, GstQueueClass))
-#define GST_IS_PRERECORDLOOP(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_PRERECORDLOOP))
-#define GST_PREREC_CAST(obj) \
-((GstPreRecordLoop*)(obj))
+G_DECLARE_FINAL_TYPE(GstPreRecordLoop, gst_pre_record_loop, GST, PRERECORDLOOP, GstElement)
+#define GST_PRERECLOOP(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_PRERECORDLOOP, GstPreRecordLoop))
+#define GST_PRERECLOOP_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_PRERECORDLOOP, GstQueueClass))
+#define GST_IS_PRERECORDLOOP(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_PRERECORDLOOP))
+#define GST_PREREC_CAST(obj) ((GstPreRecordLoop*) (obj))
 
 typedef struct _GstPreRecSize {
-  guint buffers;
-  guint bytes;
+  guint   buffers;
+  guint   bytes;
   guint64 time;
 } GstPreRecSize;
 
-typedef enum {
-  GST_PREREC_MODE_PASS_THROUGH,
-  GST_PREREC_MODE_BUFFERING
-}GstPreRecLoopMode;
+typedef enum { GST_PREREC_MODE_PASS_THROUGH, GST_PREREC_MODE_BUFFERING } GstPreRecLoopMode;
 
 /* Future statistics hook (T021/T026): lightweight counters exposed for tests */
 typedef struct _GstPreRecStats {
-  guint drops_gops;       /* number of whole GOP pruning operations */
-  guint drops_buffers;    /* number of individual buffers dropped inside GOP pruning */
-  guint drops_events;     /* number of (non-sticky) events discarded during pruning */
-  guint queued_gops_cur;  /* current GOPs resident (rough heuristic until full impl) */
+  guint drops_gops;         /* number of whole GOP pruning operations */
+  guint drops_buffers;      /* number of individual buffers dropped inside GOP pruning */
+  guint drops_events;       /* number of (non-sticky) events discarded during pruning */
+  guint queued_gops_cur;    /* current GOPs resident (rough heuristic until full impl) */
   guint queued_buffers_cur; /* current buffer count (mirror of cur_level.buffers) */
-  guint flush_count;      /* number of accepted prerecord-flush events (T026) */
-  guint rearm_count;      /* number of prerecord-arm events processed (T026) */
+  guint flush_count;        /* number of accepted prerecord-flush events (T026) */
+  guint rearm_count;        /* number of prerecord-arm events processed (T026) */
 } GstPreRecStats;
 
-typedef struct _GstPreRecordLoop
-{
+typedef struct _GstPreRecordLoop {
   GstElement element;
 
-  GstPad *sinkpad, *srcpad;
+  GstPad *   sinkpad, *srcpad;
   GstSegment sink_segment;
   GstSegment src_segment;
 
   GstClockTimeDiff sinktime, srctime;
   GstClockTimeDiff sink_start_time;
-  
+
   /* TRUE if either position needs to be recalculated */
   gboolean sink_tainted, src_tainted;
 
   /* flowreturn when srcpad is paused */
   GstFlowReturn srcresult;
-  gboolean unexpected;
-  gboolean eos;
-  
-  GMutex lock;
+  gboolean      unexpected;
+  gboolean      eos;
+
+  GMutex   lock;
   gboolean waiting_add;
-  GCond item_add;
+  GCond    item_add;
   gboolean waiting_del;
-  GCond item_del;
+  GCond    item_del;
 
   /* the queue of data */
-  GstVecDeque *queue;
+  GstVecDeque* queue;
 
   gboolean silent;
 
   GstPreRecSize cur_level;
   GstPreRecSize max_size;
-  
+
   gboolean newseg_applied_to_src;
 
   guint current_gop_id;
@@ -136,20 +127,18 @@ typedef struct _GstPreRecordLoop
   guint num_gops;
 
   GstPreRecLoopMode mode;
-  gboolean head_needs_discont;
-  gboolean tail_needs_discont;
+  gboolean          head_needs_discont;
+  gboolean          tail_needs_discont;
 
   GstPreRecFlushOnEos flush_on_eos;
-  gboolean preroll_sent;
-
+  gboolean            preroll_sent;
 
   /* custom downstream event name that triggers flush (allocated) */
-  gchar *flush_trigger_name;
+  gchar* flush_trigger_name;
 
   /* stats (incremented under lock; read-only snapshot via helper) */
   GstPreRecStats stats;
-}GstPreRecordLoop;
-
+} GstPreRecordLoop;
 
 G_END_DECLS
 

@@ -13,55 +13,63 @@
 #include <gst/app/gstappsrc.h>
 #include <stdio.h>
 
-static GstEvent * make_custom_trigger(const char *name) {
-  GstStructure *s = gst_structure_new_empty(name);
+static GstEvent* make_custom_trigger(const char* name) {
+  GstStructure* s = gst_structure_new_empty(name);
   return gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   prerec_test_init(&argc, &argv);
-  if (!prerec_factory_available()) FAIL("factory not available");
+  if (!prerec_factory_available())
+    FAIL("factory not available");
 
   PrerecTestPipeline tp;
-  if (!prerec_pipeline_create(&tp, "t020a-pipeline")) FAIL("pipeline creation failed");
+  if (!prerec_pipeline_create(&tp, "t020a-pipeline"))
+    FAIL("pipeline creation failed");
 
-  const char *custom_name = "my-prerec-flush";
+  const char* custom_name = "my-prerec-flush";
   g_object_set(tp.pr, "flush-trigger-name", custom_name, NULL);
 
-  guint64 emitted = 0;  /* count buffers on src */
-  gulong probe_id = prerec_attach_count_probe(tp.pr, &emitted);
-  if (!probe_id) FAIL("failed to attach count probe");
+  guint64 emitted  = 0; /* count buffers on src */
+  gulong  probe_id = prerec_attach_count_probe(tp.pr, &emitted);
+  if (!probe_id)
+    FAIL("failed to attach count probe");
 
   /* Phase 1: push initial GOP (buffering mode retains it; expect no emission yet). */
   guint64 ts = 0;
-  if (!prerec_push_gop(tp.appsrc, 2, &ts, GST_SECOND, NULL)) FAIL("push initial gop failed");
+  if (!prerec_push_gop(tp.appsrc, 2, &ts, GST_SECOND, NULL))
+    FAIL("push initial gop failed");
   guint64 baseline = emitted; /* expect 0 prior to flush trigger */
 
   /* Phase 2: push additional GOP to enlarge buffered set (still expect no emission) */
-  if (!prerec_push_gop(tp.appsrc, 2, &ts, GST_SECOND, NULL)) FAIL("push second gop failed");
+  if (!prerec_push_gop(tp.appsrc, 2, &ts, GST_SECOND, NULL))
+    FAIL("push second gop failed");
   guint stabilize = 0;
   while (stabilize < 10) {
     gst_bus_timed_pop_filtered(gst_element_get_bus(tp.pipeline), 5 * GST_MSECOND, GST_MESSAGE_ANY);
     stabilize++;
   }
-  if (emitted != baseline) fprintf(stderr, "T020a INFO: unexpected emission before trigger (baseline=%llu now=%llu)\n", (unsigned long long)baseline, (unsigned long long)emitted);
+  if (emitted != baseline)
+    fprintf(stderr, "T020a INFO: unexpected emission before trigger (baseline=%llu now=%llu)\n",
+            (unsigned long long) baseline, (unsigned long long) emitted);
 
   /* Inject custom downstream event that should trigger flush.
    * Proper direction: originate upstream (appsrc) so it travels downstream. */
-  GstEvent *ev = make_custom_trigger(custom_name);
+  GstEvent* ev = make_custom_trigger(custom_name);
   if (!gst_element_send_event(tp.appsrc, ev))
     FAIL("failed to send custom flush event");
 
   /* Wait for flush to drain queued buffers - allow more time for all buffers to be pushed */
   guint64 last_emitted = emitted;
-  guint stable_count = 0;
-  guint attempts = 0;
-  
+  guint   stable_count = 0;
+  guint   attempts     = 0;
+
   /* Poll until emission stabilizes (no change for several iterations) or timeout */
   while (attempts < 100 && stable_count < 10) {
     gst_bus_timed_pop_filtered(gst_element_get_bus(tp.pipeline), 5 * GST_MSECOND, GST_MESSAGE_ANY);
-    while (g_main_context_iteration(NULL, FALSE));
-    
+    while (g_main_context_iteration(NULL, FALSE))
+      ;
+
     if (emitted == last_emitted) {
       stable_count++;
     } else {
@@ -70,14 +78,15 @@ int main(int argc, char **argv) {
     }
     attempts++;
   }
-  
+
   if (emitted == baseline)
     FAIL("flush trigger produced no emitted buffers");
-  
+
   /* We pushed 2 GOPs with 3 buffers each (keyframe + 2 deltas) = 6 total expected */
   guint64 emitted_count = emitted - baseline;
   if (emitted_count < 6)
-    fprintf(stderr, "T020a INFO: expected 6 emitted buffers after flush, got %llu\n", (unsigned long long)emitted_count);
+    fprintf(stderr, "T020a INFO: expected 6 emitted buffers after flush, got %llu\n",
+            (unsigned long long) emitted_count);
 
   printf("T020a PASS: custom flush-trigger-name flushed %" G_GUINT64_FORMAT " buffers\n", emitted);
 

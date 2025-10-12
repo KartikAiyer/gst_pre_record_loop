@@ -13,20 +13,24 @@
 
 static gboolean saw_critical = FALSE;
 
-static void log_func (GstDebugCategory *category, GstDebugLevel level,
-                      const gchar *file, const gchar *function, gint line,
-                      GObject *object, GstDebugMessage *message, gpointer user_data)
-{
-  (void)category; (void)file; (void)function; (void)line; (void)object; (void)user_data;
+static void log_func(GstDebugCategory* category, GstDebugLevel level, const gchar* file, const gchar* function,
+                     gint line, GObject* object, GstDebugMessage* message, gpointer user_data) {
+  (void) category;
+  (void) file;
+  (void) function;
+  (void) line;
+  (void) object;
+  (void) user_data;
   if (level == GST_LEVEL_ERROR || level == GST_LEVEL_WARNING) {
-    const gchar *msg = gst_debug_message_get (message);
-    if (msg && strstr(msg, "gst_mini_object_unref: assertion 'GST_MINI_OBJECT_REFCOUNT_VALUE (mini_object) > 0' failed")) {
+    const gchar* msg = gst_debug_message_get(message);
+    if (msg &&
+        strstr(msg, "gst_mini_object_unref: assertion 'GST_MINI_OBJECT_REFCOUNT_VALUE (mini_object) > 0' failed")) {
       saw_critical = TRUE;
     }
   }
 }
 
-int main (int argc, char **argv) {
+int main(int argc, char** argv) {
   if (!g_getenv("GST_DEBUG"))
     g_setenv("GST_DEBUG", "prerec_dataflow:3", TRUE);
 
@@ -45,9 +49,9 @@ int main (int argc, char **argv) {
   }
 
   /* Let pipeline cycle briefly */
-  GstBus *bus = gst_element_get_bus(tp.pipeline);
-  for (int i=0; i<20; ++i) {
-    (void)gst_bus_timed_pop_filtered(bus, 5 * GST_MSECOND, GST_MESSAGE_ANY);
+  GstBus* bus = gst_element_get_bus(tp.pipeline);
+  for (int i = 0; i < 20; ++i) {
+    (void) gst_bus_timed_pop_filtered(bus, 5 * GST_MSECOND, GST_MESSAGE_ANY);
   }
   gst_object_unref(bus);
 

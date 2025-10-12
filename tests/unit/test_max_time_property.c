@@ -17,14 +17,16 @@
 #define FAIL_PREFIX "T019 FAIL (expected): "
 #include <test_utils.h>
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   prerec_test_init(&argc, &argv);
-  if (!prerec_factory_available()) FAIL("factory not available");
+  if (!prerec_factory_available())
+    FAIL("factory not available");
 
-  GstElement *el = prerec_create_element();
-  if (!el) FAIL("could not create element");
+  GstElement* el = prerec_create_element();
+  if (!el)
+    FAIL("could not create element");
 
-  GParamSpec *pspec = g_object_class_find_property(G_OBJECT_GET_CLASS(el), "max-time");
+  GParamSpec* pspec = g_object_class_find_property(G_OBJECT_GET_CLASS(el), "max-time");
   if (!pspec) {
     g_error("T019 forced fail: 'max-time' property missing");
   }
@@ -36,23 +38,31 @@ int main(int argc, char **argv) {
 
   /* Set to 5s and verify */
   g_object_set(G_OBJECT(el), "max-time", 5, NULL);
-  v = -1; g_object_get(G_OBJECT(el), "max-time", &v, NULL);
-  if (v != 5) g_error("T019 FAIL: expected max-time 5, got %d", v);
+  v = -1;
+  g_object_get(G_OBJECT(el), "max-time", &v, NULL);
+  if (v != 5)
+    g_error("T019 FAIL: expected max-time 5, got %d", v);
 
   /* Set to 0 (unlimited) and verify */
   g_object_set(G_OBJECT(el), "max-time", 0, NULL);
-  v = -1; g_object_get(G_OBJECT(el), "max-time", &v, NULL);
-  if (v != 0) g_error("T019 FAIL: expected max-time 0, got %d", v);
+  v = -1;
+  g_object_get(G_OBJECT(el), "max-time", &v, NULL);
+  if (v != 0)
+    g_error("T019 FAIL: expected max-time 0, got %d", v);
 
   /* Set a large value and verify */
   g_object_set(G_OBJECT(el), "max-time", 3600, NULL);
-  v = -1; g_object_get(G_OBJECT(el), "max-time", &v, NULL);
-  if (v != 3600) g_error("T019 FAIL: expected max-time 3600, got %d", v);
+  v = -1;
+  g_object_get(G_OBJECT(el), "max-time", &v, NULL);
+  if (v != 3600)
+    g_error("T019 FAIL: expected max-time 3600, got %d", v);
 
   /* Negative value should clamp to 0 */
   g_object_set(G_OBJECT(el), "max-time", -7, NULL);
-  v = -1; g_object_get(G_OBJECT(el), "max-time", &v, NULL);
-  if (v != 0) g_error("T019 FAIL: expected max-time clamp to 0 for negative set, got %d", v);
+  v = -1;
+  g_object_get(G_OBJECT(el), "max-time", &v, NULL);
+  if (v != 0)
+    g_error("T019 FAIL: expected max-time clamp to 0 for negative set, got %d", v);
 
   g_print("T019 PASS: max-time set/get behavior OK\n");
   g_object_unref(el);
