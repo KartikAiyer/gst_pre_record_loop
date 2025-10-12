@@ -1,0 +1,170 @@
+name: CI Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build-and-test-linux:
+    name: Build and Test on Ubuntu x86_64
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Homebrew (if not already present)
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            build-essential \
+            pkg-config \
+            python3-venv \
+            clang-format
+
+      - name: Install GStreamer
+        run: |
+          brew install gstreamer
+
+      - name: Setup Python Virtual Environment
+        run: |
+          python3 -m venv venv
+          echo "VIRTUAL_ENV=./venv" >> $GITHUB_ENV
+          echo "./venv/bin" >> $GITHUB_PATH
+
+      - name: Install Conan
+        run: |
+          pip install conan
+          conan --version
+      
+      - name: Configure Conan profile
+        run: |
+          conan profile detect --force
+      
+      - name: Install Conan dependencies (Debug)
+        run: |
+          conan install . --build=missing --settings=build_type=Debug
+      
+      - name: Install Conan dependencies (Release)
+        run: |
+          conan install . --build=missing --settings=build_type=Release
+      
+      - name: Run CI test script
+        env:
+          ENFORCE_STYLE: 1  # Enforce code style in CI
+        run: |
+          chmod +x .ci/run-tests.sh
+          bash .ci/run-tests.sh
+      
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            build/Debug/Testing/
+            build/Release/Testing/
+          retention-days: 7
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CI Build and Test Results" >> $GITHUB_STEP_SUMMARY
+          
+          # Count tests from Debug build
+          DEBUG_TESTS=$(ctest --show-only=json-v1 --test-dir build/Debug 2>/dev/null | grep -c '"name"' || echo "0")
+          echo "### Debug Build" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests discovered: $DEBUG_TESTS" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if Release build exists
+          if [ -d "build/Release" ]; then
+            RELEASE_TESTS=$(ctest --show-only=json-v1 --test-dir build/Release 2>/dev/null | grep -c '"name"' || echo "0")
+            echo "### Release Build" >> $GITHUB_STEP_SUMMARY
+            echo "- Tests discovered: $RELEASE_TESTS" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ All builds and tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Build or test failures detected" >> $GITHUB_STEP_SUMMARY
+            echo "See test results artifact for details" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  build-and-test-macos:
+    name: Build and Test on macOS ARM64
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Homebrew dependencies
+        run: |
+          brew install gstreamer conan cmake clang-format
+
+      - name: Conan version
+        run: conan --version
+      
+      - name: Configure Conan profile
+        run: |
+          conan profile detect --force
+      
+      - name: Install Conan dependencies (Debug)
+        run: |
+          conan install . --build=missing --settings=build_type=Debug
+      
+      - name: Install Conan dependencies (Release)
+        run: |
+          conan install . --build=missing --settings=build_type=Release
+      
+      - name: Run CI test script
+        env:
+          ENFORCE_STYLE: 1  # Enforce code style in CI
+        run: |
+          chmod +x .ci/run-tests.sh
+          bash .ci/run-tests.sh
+      
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-macos
+          path: |
+            build/Debug/Testing/
+            build/Release/Testing/
+          retention-days: 7
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CI Build and Test Results (macOS)" >> $GITHUB_STEP_SUMMARY
+          
+          # Count tests from Debug build
+          DEBUG_TESTS=$(ctest --show-only=json-v1 --test-dir build/Debug 2>/dev/null | grep -c '"name"' || echo "0")
+          echo "### Debug Build" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests discovered: $DEBUG_TESTS" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if Release build exists
+          if [ -d "build/Release" ]; then
+            RELEASE_TESTS=$(ctest --show-only=json-v1 --test-dir build/Release 2>/dev/null | grep -c '"name"' || echo "0")
+            echo "### Release Build" >> $GITHUB_STEP_SUMMARY
+            echo "- Tests discovered: $RELEASE_TESTS" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ All builds and tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Build or test failures detected" >> $GITHUB_STEP_SUMMARY
+            echo "See test results artifact for details" >> $GITHUB_STEP_SUMMARY
+          fi
