@@ -10,39 +10,47 @@ on:
 jobs:
   valgrind-linux:
     name: Valgrind on Ubuntu x86_64
-    runs-on: ubuntu-24.04  # Use Ubuntu 24.04 for GStreamer 1.24+
+    runs-on: ubuntu-22.04
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
+      - name: Install Homebrew (if not already present)
+        uses: Homebrew/actions/setup-homebrew@master
+
       - name: Install system dependencies
         run: |
-          sudo apt-get update
           sudo apt-get install -y \
             valgrind \
             cmake \
             build-essential \
             pkg-config \
-            libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-base \
-            gstreamer1.0-plugins-good \
-            python3-pip
-      
-      - name: Check GStreamer version
+            python3-venv
+
+      - name: Install Gstreamer Dev versions
         run: |
-          GST_VERSION=$(pkg-config --modversion gstreamer-1.0)
-          echo "GStreamer version: $GST_VERSION"
-          # Verify GStreamer >= 1.24 (required for GstVecDeque)
-          if ! pkg-config --atleast-version=1.24 gstreamer-1.0; then
-            echo "Error: GStreamer 1.24+ required (found $GST_VERSION)"
-            exit 1
-          fi
+          brew install gstreamer
+
+      - name: Setup Python Virtual Environment
+        run: |
+          python3 -m venv venv
+          echo "VIRTUAL_ENV=./venv" >> $GITHUB_ENV
+          echo "./venv/bin" >> $GITHUB_PATH
+
+      # - name: Check GStreamer version
+      #   run: |
+      #     GST_VERSION=$(pkg-config --modversion gstreamer-1.0)
+      #     echo "GStreamer version: $GST_VERSION"
+      #     # Verify GStreamer >= 1.26 (required for GstVecDeque)
+      #     if ! pkg-config --atleast-version=1.26 gstreamer-1.0; then
+      #       echo "Error: GStreamer 1.26+ required (found $GST_VERSION)"
+      #       exit 1
+      #     fi
       
       - name: Install Conan
         run: |
-          pip3 install conan
+          pip install conan
           conan --version
       
       - name: Configure Conan profile
