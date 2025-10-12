@@ -49,8 +49,6 @@ find_package(PkgConfig REQUIRED)
 #find_package(gstreamer REQUIRED)
 pkg_check_modules(gstreamer REQUIRED IMPORTED_TARGET gstreamer-1.0)
 find_package(spdlog REQUIRED)
-find_package(uvw REQUIRED)
-find_package(catch2 REQUIRED)
 
 add_subdirectory(gstprerecordloop)
 add_subdirectory(testapp)
