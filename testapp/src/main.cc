@@ -1,5 +1,4 @@
 #include <gst/gst.h>
-#include <print>
 #include <signal.h>
 
 // Global pipeline pointer for signal handler

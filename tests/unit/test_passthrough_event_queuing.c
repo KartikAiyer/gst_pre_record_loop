@@ -15,9 +15,8 @@
  */
 
 #include <gst/gst.h>
-#include <test_utils.h>
-
 #define FAIL_PREFIX "T034b FAIL: "
+#include <test_utils.h>
 
 static gint segment_count = 0;
 static gint gap_count     = 0;

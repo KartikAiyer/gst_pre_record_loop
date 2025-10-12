@@ -11,9 +11,8 @@
  */
 
 #include <gst/gst.h>
-#include <test_utils.h>
-
 #define FAIL_PREFIX "T034a FAIL: "
+#include <test_utils.h>
 
 static gboolean flush_start_seen = FALSE;
 static gboolean flush_stop_seen  = FALSE;
