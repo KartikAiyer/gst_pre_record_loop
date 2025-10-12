@@ -4,6 +4,7 @@ project(prerec C CXX)
 # Option: BUILD_GTK_DOC (Phase 3.1 T007) - disabled by default
 option(BUILD_GTK_DOC "Build gtk-doc API reference (requires gtk-doc tools)" OFF)
 option(PREREC_ENABLE_LIFE_DIAG "Enable prerecordloop lifecycle/sticky diagnostics (ref/push tracking)" OFF)
+option(ENABLE_ASAN "Enable AddressSanitizer for leak/memory error detection (macOS/Linux)" OFF)
 
 # Get the existing PKG_CONFIG_PATH environment variable
 # If it's not set, it will be an empty string
@@ -19,6 +20,13 @@ set(CUMULATIVE_PATH "${GSTREAMER_PKGCONFIG_DIR}:${GLIB_PKGCONFIG_DIR}")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 23)
+
+# AddressSanitizer configuration (T039)
+if(ENABLE_ASAN)
+  message(STATUS "AddressSanitizer enabled for leak/memory error detection")
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+  add_link_options(-fsanitize=address)
+endif()
 
 # Enable testing framework before adding subdirectories that register tests
 enable_testing()

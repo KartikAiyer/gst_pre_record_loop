@@ -1,0 +1,76 @@
+name: Valgrind Memory Leak Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  valgrind-linux:
+    name: Valgrind on Ubuntu x86_64
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            valgrind \
+            cmake \
+            build-essential \
+            pkg-config \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            python3-pip
+      
+      - name: Install Conan
+        run: |
+          pip3 install conan
+          conan --version
+      
+      - name: Configure Conan profile
+        run: |
+          conan profile detect --force
+      
+      - name: Install Conan dependencies
+        run: |
+          conan install . --build=missing --settings=build_type=Debug
+      
+      - name: Configure CMake
+        run: |
+          cmake --preset=conan-debug
+      
+      - name: Build project
+        run: |
+          cmake --build build/Debug --parallel $(nproc)
+      
+      - name: Run Valgrind leak tests
+        run: |
+          chmod +x tests/memory/test_leaks_valgrind.sh
+          bash tests/memory/test_leaks_valgrind.sh
+      
+      - name: Upload Valgrind logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valgrind-logs
+          path: build/valgrind_logs/
+          retention-days: 7
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Valgrind Memory Leak Check Results" >> $GITHUB_STEP_SUMMARY
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ No memory leaks detected" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Memory leaks or test failures detected" >> $GITHUB_STEP_SUMMARY
+            echo "See artifacts for detailed Valgrind logs" >> $GITHUB_STEP_SUMMARY
+          fi
