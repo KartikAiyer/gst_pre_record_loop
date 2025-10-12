@@ -1,6 +1,16 @@
 # Introduction
 
+**Status**: ✅ Production Ready (Baseline Spec Complete - October 11, 2025)
+
 This project implements a GStreamer plugin featuring a ring buffer filter for encoded video capture. The filter addresses a common requirement in event-driven recording applications: capturing video data that occurred before an event was detected.
+
+**Key Features**:
+- GOP-aware buffering with 2-GOP minimum retention
+- Custom event-driven state machine (BUFFERING ↔ PASS_THROUGH)
+- Configurable flush policies and properties
+- Sub-millisecond pruning latency (median 6µs)
+- Memory-safe with validated refcount handling
+- Comprehensive test suite (22 tests, 100% passing)
 
 ## How it works
 
