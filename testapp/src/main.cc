@@ -54,30 +54,54 @@ static GstPadProbeReturn frame_counter_probe(GstPad* pad, GstPadProbeInfo* info,
 }
 
 static GstElement* create_pipeline() {
-  const char* pipeline_desc =
+  /* Probe for available H.264 encoders and pick the first available
+   * priority list: vtenc_h264 (mac), v4l2h264enc, v4l2h264, x264enc
+   */
+  const char* candidates[] = {"vtenc_h264", "v4l2h264enc", "v4l2h264", "x264enc", NULL};
+  const char* chosen = NULL;
+  for (const char** c = candidates; *c != NULL; ++c) {
+    GstElementFactory* factory = gst_element_factory_find(*c);
+    if (factory) {
+      chosen = *c;
+      gst_object_unref(factory);
+      break;
+    }
+  }
+
+  if (!chosen) {
+    g_printerr("No suitable H.264 encoder found. Tried vtenc_h264, v4l2h264enc, v4l2h264, x264enc.\n");
+    return NULL;
+  }
+
 #ifdef AS_MP4
-      "videotestsrc is-live=true ! "
-      "capsfilter "
-      "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
-      "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
-      "videoconvert ! "
-      "vtenc_h264 ! "
-      "h264parse ! "
-      "mp4mux ! "
-      "filesink location=output.mp4";
+  gchar pipeline_desc[1024];
+  g_snprintf(pipeline_desc, sizeof(pipeline_desc),
+             "videotestsrc is-live=true ! "
+             "capsfilter "
+             "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
+             "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
+             "videoconvert ! %s ! "
+             "h264parse ! "
+             "mp4mux ! "
+             "filesink location=output.mp4",
+             chosen);
 #else
-      "videotestsrc is-live=true num-buffers=900 name=testsrc ! "
-      "capsfilter "
-      "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
-      "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
-      "videoconvert ! "
-      "vtenc_h264 ! "
-      "h264parse ! "
-      "pre_record_loop name=prerecordloop ! "
-      "qtmux ! "
-      "filesink location=output_prerecord.mp4";
+  gchar pipeline_desc[1024];
+  g_snprintf(pipeline_desc, sizeof(pipeline_desc),
+             "videotestsrc is-live=true num-buffers=900 name=testsrc ! "
+             "capsfilter "
+             "caps=video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! "
+             "timeoverlay text=\"Stopwatch: \" shaded-background=true ! "
+             "videoconvert ! %s ! "
+             "h264parse ! "
+             "pre_record_loop name=prerecordloop ! "
+             "qtmux ! "
+             "filesink location=output_prerecord.mp4",
+             chosen);
 #endif
-  return gst_parse_launch(pipeline_desc, nullptr);
+
+  g_print("Using encoder: %s\n", chosen);
+  return gst_parse_launch(pipeline_desc, NULL);
 }
 
 int main(int argc, char* argv[]) {
