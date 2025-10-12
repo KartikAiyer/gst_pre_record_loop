@@ -18,10 +18,12 @@ The filter operates as a ring buffer, continuously caching encoded video frames.
 
 ## Sample Pipeline
 
+```
 ┌────────┐      ┌───────┐        ┌─────────┐        ┌──────────┐       ┌───────┐     ┌────────┐
 │ VidSrc ┼─────►│ xh264 ┼───────►│h264Parse┼───────►│prerecloop┼──────►│  Mux  ┼────►│filesink│
 │        │      │       │        │         │        │          │       │       │     │        │
 └────────┘      └───────┘        └─────────┘        └──────────┘       └───────┘     └────────┘
+```
 
 The idea is that the prerecloop will buffer video frames until an event is published after which it will push buffered frames and incoming frames 
 downstream to the file sink.
