@@ -6,9 +6,9 @@ static GstElement* g_pipeline = nullptr;
 
 // Structure to track frame count and trigger flush
 typedef struct {
-  guint frame_count;
+  guint       frame_count;
   GstElement* prerecordloop;
-  gboolean flush_sent;
+  gboolean    flush_sent;
 } ProbeData;
 
 // Signal handler for Ctrl-C
@@ -21,21 +21,20 @@ static void sigint_handler(int sig) {
 
 // Pad probe callback to count frames and trigger flush at frame 600
 static GstPadProbeReturn frame_counter_probe(GstPad* pad, GstPadProbeInfo* info, gpointer user_data) {
-  ProbeData* data = (ProbeData*)user_data;
-  
+  ProbeData* data = (ProbeData*) user_data;
+
   // Only count buffers, not events
   if (GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_BUFFER) {
     data->frame_count++;
-    
+
     // Send flush trigger after 600 frames (2/3 of 900)
     if (data->frame_count == 600 && !data->flush_sent) {
       g_print("Frame %u reached - Sending flush trigger to prerecordloop!\n", data->frame_count);
-      
+
       // Create custom flush event
-      GstEvent* flush_event = gst_event_new_custom(
-          GST_EVENT_CUSTOM_DOWNSTREAM,
-          gst_structure_new_empty("prerecord-flush"));
-      
+      GstEvent* flush_event =
+          gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, gst_structure_new_empty("prerecord-flush"));
+
       // Send event to prerecordloop element
       if (gst_element_send_event(data->prerecordloop, flush_event)) {
         g_print("Flush event sent successfully!\n");
@@ -44,13 +43,13 @@ static GstPadProbeReturn frame_counter_probe(GstPad* pad, GstPadProbeInfo* info,
         g_printerr("Failed to send flush event!\n");
       }
     }
-    
+
     // Log progress every 30 frames (1 second at 30fps)
     if (data->frame_count % 30 == 0) {
       g_print("Processed %u frames...\n", data->frame_count);
     }
   }
-  
+
   return GST_PAD_PROBE_OK;
 }
 
@@ -100,7 +99,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   g_print("Plugin loaded successfully\n");
-  
+
   // Create pipeline
   pipeline = create_pipeline();
   if (!pipeline) {
@@ -108,12 +107,12 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   g_pipeline = pipeline; // Assign to global variable
-  
+
   // Get reference to the prerecordloop element for property access and event sending
   GstElement* prerecordloop = NULL;
-  GstElement* videotestsrc = NULL;
-  ProbeData probe_data = {0, NULL, FALSE};
-  
+  GstElement* videotestsrc  = NULL;
+  ProbeData   probe_data    = {0, NULL, FALSE};
+
 #ifndef AS_MP4
   // Only get the element if we're using the prerecordloop pipeline
   prerecordloop = gst_bin_get_by_name(GST_BIN(pipeline), "prerecordloop");
@@ -123,7 +122,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   g_print("Successfully obtained prerecordloop element reference\n");
-  
+
   // Get the videotestsrc element to attach probe
   videotestsrc = gst_bin_get_by_name(GST_BIN(pipeline), "testsrc");
   if (!videotestsrc) {
@@ -133,7 +132,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   g_print("Successfully obtained videotestsrc element reference\n");
-  
+
   // Attach probe to videotestsrc's src pad to count frames
   GstPad* src_pad = gst_element_get_static_pad(videotestsrc, "src");
   if (!src_pad) {
@@ -143,19 +142,19 @@ int main(int argc, char* argv[]) {
     gst_object_unref(pipeline);
     return -1;
   }
-  
-// Initialize probe data
-  probe_data.frame_count = 0;
+
+  // Initialize probe data
+  probe_data.frame_count   = 0;
   probe_data.prerecordloop = prerecordloop;
-  probe_data.flush_sent = FALSE;
-  
+  probe_data.flush_sent    = FALSE;
+
   // Add probe to count buffers
   gst_pad_add_probe(src_pad, GST_PAD_PROBE_TYPE_BUFFER, frame_counter_probe, &probe_data, NULL);
   g_print("Added frame counter probe to videotestsrc src pad\n");
-  
+
   gst_object_unref(src_pad);
   gst_object_unref(videotestsrc);
-#endif  // Register signal handler for Ctrl-C
+#endif // Register signal handler for Ctrl-C
   g_print("Registered signal handler for Ctrl-C. Press Ctrl-C to stop recording.\n");
   signal(SIGINT, sigint_handler);
 
