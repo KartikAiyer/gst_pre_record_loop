@@ -188,10 +188,3 @@ See `gstprerecordloop.c` src query handler for returned fields.
 5. Run affected tests: `ctest --test-dir build/Debug -R <pattern> -V`
 6. Verify no refcount regressions: `ctest -R prerec_unit_no_refcount_critical`
 7. Update `tasks.md` checklist and commit with task ID
-
-## Next Priorities (Pending Tasks)
-- T024: Sub-second max-time flooring
-- T025: AUTO EOS policy refinement
-- T026: Extended stats counters (flush_count, rearm_count)
-- T027: State transition debug logging
-- Integration tests (T030–T033) after core complete

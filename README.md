@@ -17,13 +17,11 @@ This project implements a GStreamer plugin featuring a ring buffer filter for en
 The filter operates as a ring buffer, continuously caching encoded video frames. When an event is triggered, it transitions to pass-through mode, first sending the cached pre-event data downstream, followed by real-time incoming frames.
 
 ## Sample Pipeline
-
 ```
 ┌────────┐      ┌───────┐        ┌─────────┐        ┌──────────┐       ┌───────┐     ┌────────┐
 │ VidSrc ┼─────►│ xh264 ┼───────►│h264Parse┼───────►│prerecloop┼──────►│  Mux  ┼────►│filesink│
 │        │      │       │        │         │        │          │       │       │     │        │
 └────────┘      └───────┘        └─────────┘        └──────────┘       └───────┘     └────────┘
-```
 
 The idea is that the prerecloop will buffer video frames until an event is published after which it will push buffered frames and incoming frames 
 downstream to the file sink.
@@ -139,11 +137,6 @@ g_object_set(G_OBJECT(prerecordloop),
 - `max-time` enforces a **2-GOP minimum floor**: Even if a single GOP exceeds `max-time`, it and the preceding GOP (if present) are always retained to ensure playback continuity.
 - `flush-trigger-name` must match the structure name of the custom downstream event exactly (case-sensitive).
 - All properties are readable and writable at runtime via `g_object_get/set` or GStreamer property syntax.
-
-# Test Application
-
-At this point there are no unit tests, however I have created a test application that uses my filter in a pipeline. This is found in `testapp/src/main.cc`.
-I should probably have some unit tests to introspect and verify performance of the pre record loop at a more granular level. 
 
 # Building the Code
 
@@ -351,31 +344,4 @@ Make sure to specify the appropriate test directory based on your build configur
 
 # Running the test app from the Build directory
 
-NOTE: This testapp is not as useful as the unit tests and will soon be deprecated and removed.
-
-For brevity I will just consider the Debug version. The same shouls apply for a release version with the folders slightly modified.
-
-### Running without the relevant GStreamer logs.
-
-This will just run the test app (it currently just outputs 450 frames using the test source element from gstreamer) without additional gstreamer logging
-```sh
-build/Debug/testapp/prerec.app/Contents/MacOS/prerec
-```
-
-If you want to get Gstreamer logging with the prerecloop module logging at high granularity run this instead
-
-```sh
-GST_DEBUG=*:4,pre_record_loop:7,pre_record_loop_dataflow:7 build/Debug/testapp/prerec.app/Contents/MacOS/prerec
-```
-
-For lifecycle diagnostics (if built with `PREREC_ENABLE_LIFE_DIAG=1`) add:
-
-```sh
-GST_DEBUG=prerec_lifecycle:7,prerec_dataflow:5 build/Debug/testapp/prerec.app/Contents/MacOS/prerec
-```
-
-Or to exercise the unit test with diagnostics:
-
-```sh
-GST_DEBUG=prerec_lifecycle:7,prerec_dataflow:5 ctest -R prerec_unit_no_refcount_critical -V
-```
+In addition to the tests, there is a small [test app described here](testapp/README.md).
