@@ -46,14 +46,14 @@ jobs:
         with:
           path: |
             /home/linuxbrew/.linuxbrew/Cellar
-            /home/linuxbrew/.linuxbrew/lib/pkgconfig
+            /home/linuxbrew/.linuxbrew/opt
+            /home/linuxbrew/.linuxbrew/lib
             /home/linuxbrew/.linuxbrew/include
           key: ${{ runner.os }}-linuxbrew-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: |
             ${{ runner.os }}-linuxbrew-
 
       - name: Install GStreamer
-        if: steps.cache-homebrew-linux.outputs.cache-hit != 'true'
         run: |
           brew install gstreamer
       
@@ -114,14 +114,14 @@ jobs:
         with:
           path: |
             /opt/homebrew/Cellar
-            /opt/homebrew/lib/pkgconfig
+            /opt/homebrew/opt
+            /opt/homebrew/lib
             /opt/homebrew/include
           key: ${{ runner.os }}-homebrew-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: |
             ${{ runner.os }}-homebrew-
 
       - name: Install Homebrew dependencies
-        if: steps.cache-homebrew-macos.outputs.cache-hit != 'true'
         run: |
           brew install gstreamer cmake clang-format
       
