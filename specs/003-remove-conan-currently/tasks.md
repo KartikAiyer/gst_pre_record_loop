@@ -177,7 +177,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.6: Local Validation (macOS)
 **Goal**: Execute quickstart.md validation procedure on macOS
 
-- [ ] **T009** Execute quickstart.md Parts 1-4 on macOS development machine
+- [x] **T009** Execute quickstart.md Parts 1-4 on macOS development machine
   - **Reference**: `/Users/kartikaiyer/fun/gst_my_filter/specs/003-remove-conan-currently/quickstart.md`
   - **Actions**:
     1. **Part 1**: Verify prerequisites (GStreamer 1.26+, CMake 3.27+, no Conan)
@@ -199,7 +199,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
   - **Validation**: Document results in quickstart.md sign-off section
   - **Dependencies**: T001-T008 (all changes committed)
 
-- [ ] **T010** Execute quickstart.md Part 7 (CI simulation) locally
+- [x] **T010** Execute quickstart.md Part 7 (CI simulation) locally
   - **Reference**: quickstart.md Part 7
   - **Actions**:
     1. Run `.ci/run-tests.sh` locally
