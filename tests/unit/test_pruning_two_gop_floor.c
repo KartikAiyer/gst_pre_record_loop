@@ -23,11 +23,11 @@ int main(int argc, char** argv) {
    * Frame duration: 1s -> GOP = 4s. max-time=9s means after 3 GOPs (12s) prune -> leave 2. */
   g_object_set(tp.pr, "max-time", 9, NULL);
   const guint64 per_buf = 1 * GST_SECOND;
-  guint64       ts      = 0;
+  guint64 ts = 0;
   /* Preroll single keyframe */
   {
-    GstBuffer* preroll           = gst_buffer_new();
-    GST_BUFFER_PTS(preroll)      = ts;
+    GstBuffer* preroll = gst_buffer_new();
+    GST_BUFFER_PTS(preroll) = ts;
     GST_BUFFER_DURATION(preroll) = per_buf;
     if (gst_app_src_push_buffer(GST_APP_SRC(tp.appsrc), preroll) != GST_FLOW_OK)
       FAIL("preroll push failed");
@@ -47,8 +47,8 @@ int main(int argc, char** argv) {
     gst_query_unref(q);
     FAIL("stats query failed");
   }
-  const GstStructure* s          = gst_query_get_structure(q);
-  guint               drops_gops = 0, drops_buffers = 0, queued_gops = 0;
+  const GstStructure* s = gst_query_get_structure(q);
+  guint drops_gops = 0, drops_buffers = 0, queued_gops = 0;
   gst_structure_get_uint(s, "drops-gops", &drops_gops);
   gst_structure_get_uint(s, "drops-buffers", &drops_buffers);
   gst_structure_get_uint(s, "queued-gops", &queued_gops);

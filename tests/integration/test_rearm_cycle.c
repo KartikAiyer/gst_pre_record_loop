@@ -21,29 +21,29 @@
 #include <stdio.h>
 
 static gboolean send_flush_trigger(GstElement* pr, const char* name) {
-  const gchar*  evname = name ? name : "prerecord-flush";
-  GstStructure* s      = gst_structure_new_empty(evname);
-  GstEvent*     ev     = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+  const gchar* evname = name ? name : "prerecord-flush";
+  GstStructure* s = gst_structure_new_empty(evname);
+  GstEvent* ev = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
 
 /* Placeholder for future re-arm custom event sender */
 static gboolean send_rearm_event(GstElement* pr) {
-  GstStructure* s  = gst_structure_new_empty("prerecord-arm");
-  GstEvent*     ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
+  GstStructure* s = gst_structure_new_empty("prerecord-arm");
+  GstEvent* ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
 
 typedef struct {
-  guint64  emitted;
-  guint64  last_pts;
+  guint64 emitted;
+  guint64 last_pts;
   gboolean pts_monotonic;
 } EmissionStats;
 
 static GstPadProbeReturn integration_count_probe_cb(GstPad* pad, GstPadProbeInfo* info, gpointer user_data) {
   if ((info->type & GST_PAD_PROBE_TYPE_BUFFER) && user_data) {
-    EmissionStats* st  = (EmissionStats*) user_data;
-    GstBuffer*     buf = GST_PAD_PROBE_INFO_BUFFER(info);
+    EmissionStats* st = (EmissionStats*) user_data;
+    GstBuffer* buf = GST_PAD_PROBE_INFO_BUFFER(info);
     if (buf) {
       GstClockTime pts = GST_BUFFER_PTS(buf);
       if (GST_CLOCK_TIME_IS_VALID(pts)) {
@@ -63,8 +63,8 @@ static GstPadProbeReturn integration_count_probe_cb(GstPad* pad, GstPadProbeInfo
 /* Wait for emission count to stabilize */
 static void wait_for_stable_emission(GstElement* pipeline, guint64* emitted_ptr, guint stable_threshold,
                                      guint max_attempts) {
-  guint64 last   = *emitted_ptr;
-  guint   stable = 0;
+  guint64 last = *emitted_ptr;
+  guint stable = 0;
   for (guint i = 0; i < max_attempts && stable < stable_threshold; ++i) {
     gst_bus_timed_pop_filtered(gst_element_get_bus(pipeline), 5 * GST_MSECOND, GST_MESSAGE_ANY);
     while (g_main_context_iteration(NULL, FALSE))
@@ -72,7 +72,7 @@ static void wait_for_stable_emission(GstElement* pipeline, guint64* emitted_ptr,
     if (*emitted_ptr == last) {
       stable++;
     } else {
-      last   = *emitted_ptr;
+      last = *emitted_ptr;
       stable = 0;
     }
   }
@@ -94,14 +94,14 @@ int main(int argc, char** argv) {
   if (!srcpad)
     FAIL("no src pad");
   EmissionStats est = {0, GST_CLOCK_TIME_NONE, TRUE};
-  gulong        pid = gst_pad_add_probe(srcpad, GST_PAD_PROBE_TYPE_BUFFER, integration_count_probe_cb, &est, NULL);
+  gulong pid = gst_pad_add_probe(srcpad, GST_PAD_PROBE_TYPE_BUFFER, integration_count_probe_cb, &est, NULL);
   gst_object_unref(srcpad);
   if (!pid)
     FAIL("probe attach failed");
 
-  guint64       pts    = 0;
-  const guint64 dur    = GST_SECOND;
-  const int     cycles = 3;
+  guint64 pts = 0;
+  const guint64 dur = GST_SECOND;
+  const int cycles = 3;
 
   for (int cycle = 0; cycle < cycles; ++cycle) {
     g_print("T015: === Cycle %d ===\n", cycle + 1);

@@ -91,9 +91,9 @@ int main(int argc, char* argv[]) {
 
   GstSegment segment;
   gst_segment_init(&segment, GST_FORMAT_TIME);
-  segment.start    = 0;
-  segment.stop     = GST_CLOCK_TIME_NONE;
-  segment.time     = 0;
+  segment.start = 0;
+  segment.stop = GST_CLOCK_TIME_NONE;
+  segment.time = 0;
   segment.position = 0;
 
   GstEvent* segment_event = gst_event_new_segment(&segment);
@@ -144,8 +144,8 @@ int main(int argc, char* argv[]) {
   gap_events_received = 0;
 
   /* Send flush trigger */
-  GstStructure* flush_struct  = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_struct);
+  GstStructure* flush_struct = gst_structure_new_empty("prerecord-flush");
+  GstEvent* flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_struct);
   if (!gst_pad_send_event(sink, flush_trigger)) {
     gst_object_unref(sink);
     gst_object_unref(src);
@@ -173,7 +173,7 @@ int main(int argc, char* argv[]) {
    * duplicate emission and memory waste. */
 
   gap_events_received = 0;
-  gap_event           = gst_event_new_gap(5 * GST_SECOND, GST_SECOND);
+  gap_event = gst_event_new_gap(5 * GST_SECOND, GST_SECOND);
   if (!gst_pad_send_event(sink, gap_event)) {
     gst_object_unref(sink);
     gst_object_unref(src);
@@ -249,8 +249,8 @@ int main(int argc, char* argv[]) {
   /* Query stats to verify queue has accumulated content */
   GstQuery* q = gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("prerec-stats"));
   if (gst_element_query(p.pr, q)) {
-    const GstStructure* s           = gst_query_get_structure(q);
-    guint               queued_gops = 0;
+    const GstStructure* s = gst_query_get_structure(q);
+    guint queued_gops = 0;
     gst_structure_get_uint(s, "queued-gops", &queued_gops);
 
     if (queued_gops == 0) {
@@ -275,7 +275,7 @@ int main(int argc, char* argv[]) {
   g_print("T032: Flushing to verify GAP emitted in correct timeline position...\n");
   gap_events_received = 0;
 
-  flush_struct  = gst_structure_new_empty("prerecord-flush");
+  flush_struct = gst_structure_new_empty("prerecord-flush");
   flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_struct);
   if (!gst_pad_send_event(sink, flush_trigger)) {
     gst_object_unref(sink);

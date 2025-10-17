@@ -20,8 +20,8 @@
  * Returns TRUE on success, FALSE on failure (with error message printed)
  */
 static gboolean test_caps_acceptance(GstElement* el, const char* caps_str, gboolean should_accept) {
-  GstPad*  sink   = gst_element_get_static_pad(el, "sink");
-  GstPad*  src    = gst_element_get_static_pad(el, "src");
+  GstPad* sink = gst_element_get_static_pad(el, "sink");
+  GstPad* src = gst_element_get_static_pad(el, "src");
   gboolean result = FALSE;
 
   GstCaps* caps = gst_caps_from_string(caps_str);
@@ -31,10 +31,10 @@ static gboolean test_caps_acceptance(GstElement* el, const char* caps_str, gbool
   }
 
   /* Test via caps query to check if element supports these caps */
-  GstCaps* sink_caps    = gst_pad_query_caps(sink, NULL);
+  GstCaps* sink_caps = gst_pad_query_caps(sink, NULL);
   gboolean sink_accepts = gst_caps_can_intersect(sink_caps, caps);
 
-  GstCaps* src_caps    = gst_pad_query_caps(src, NULL);
+  GstCaps* src_caps = gst_pad_query_caps(src, NULL);
   gboolean src_accepts = gst_caps_can_intersect(src_caps, caps);
 
   if (should_accept) {
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
 
   /* Check pads existence */
   GstPad* sink = gst_element_get_static_pad(el, "sink");
-  GstPad* src  = gst_element_get_static_pad(el, "src");
+  GstPad* src = gst_element_get_static_pad(el, "src");
   if (!sink || !src) {
     if (sink)
       gst_object_unref(sink);
@@ -134,7 +134,7 @@ int main(int argc, char* argv[]) {
 
   /* T030: Verify caps query returns expected caps on both pads */
   GstCaps* query_caps_sink = gst_pad_query_caps(sink, NULL);
-  GstCaps* query_caps_src  = gst_pad_query_caps(src, NULL);
+  GstCaps* query_caps_src = gst_pad_query_caps(src, NULL);
 
   if (!query_caps_sink || !query_caps_src) {
     if (query_caps_sink)
@@ -153,8 +153,8 @@ int main(int argc, char* argv[]) {
 
   gboolean has_h264_sink = gst_caps_can_intersect(query_caps_sink, h264_caps);
   gboolean has_h265_sink = gst_caps_can_intersect(query_caps_sink, h265_caps);
-  gboolean has_h264_src  = gst_caps_can_intersect(query_caps_src, h264_caps);
-  gboolean has_h265_src  = gst_caps_can_intersect(query_caps_src, h265_caps);
+  gboolean has_h264_src = gst_caps_can_intersect(query_caps_src, h264_caps);
+  gboolean has_h265_src = gst_caps_can_intersect(query_caps_src, h265_caps);
 
   if (!has_h264_sink || !has_h265_sink || !has_h264_src || !has_h265_src) {
     gst_caps_unref(h264_caps);

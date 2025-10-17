@@ -51,7 +51,7 @@ gboolean prerec_wait_for_stats(GstElement* pr, guint min_gops, guint min_drops_g
 
 /* (Optional) Attach a probe to element src pad to count buffers emitted. */
 gulong prerec_attach_count_probe(GstElement* el, guint64* counter_out);
-void   prerec_remove_probe(GstElement* el, gulong id);
+void prerec_remove_probe(GstElement* el, gulong id);
 
 /* Macro for test failures with variadic printf-style formatting.
  * Usage: FAIL("expected %d, got %d", expected, actual);

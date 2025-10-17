@@ -21,14 +21,14 @@
 #include <stdio.h>
 
 static gboolean send_flush(GstElement* pr) {
-  GstStructure* s  = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     ev = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+  GstStructure* s = gst_structure_new_empty("prerecord-flush");
+  GstEvent* ev = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
 
 static gboolean send_rearm(GstElement* pr) {
-  GstStructure* s  = gst_structure_new_empty("prerecord-arm");
-  GstEvent*     ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
+  GstStructure* s = gst_structure_new_empty("prerecord-arm");
+  GstEvent* ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
 
@@ -39,9 +39,9 @@ static gboolean get_stats_counters(GstElement* pr, guint* flush_count, guint* re
     gst_query_unref(q);
     return FALSE;
   }
-  const GstStructure* s         = gst_query_get_structure(q);
-  gboolean            has_flush = gst_structure_get_uint(s, "flush-count", flush_count);
-  gboolean            has_rearm = gst_structure_get_uint(s, "rearm-count", rearm_count);
+  const GstStructure* s = gst_query_get_structure(q);
+  gboolean has_flush = gst_structure_get_uint(s, "flush-count", flush_count);
+  gboolean has_rearm = gst_structure_get_uint(s, "rearm-count", rearm_count);
   gst_query_unref(q);
   return has_flush && has_rearm;
 }
@@ -64,14 +64,14 @@ int main(int argc, char** argv) {
   if (!prerec_pipeline_create(&tp, "t026-stats"))
     FAIL("pipeline creation failed");
 
-  guint64 emitted  = 0;
-  gulong  probe_id = prerec_attach_count_probe(tp.pr, &emitted);
+  guint64 emitted = 0;
+  gulong probe_id = prerec_attach_count_probe(tp.pr, &emitted);
   if (!probe_id)
     FAIL("failed to attach emission probe");
 
-  guint64       ts          = 0;
-  const guint64 delta       = GST_SECOND;
-  guint         flush_count = 0, rearm_count = 0;
+  guint64 ts = 0;
+  const guint64 delta = GST_SECOND;
+  guint flush_count = 0, rearm_count = 0;
 
   /* === PART 1: Initial state verification === */
   g_print("T026: Part 1 - Verifying initial stats...\n");

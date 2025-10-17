@@ -30,8 +30,8 @@ int main(int argc, char** argv) {
   const char* custom_name = "my-prerec-flush";
   g_object_set(tp.pr, "flush-trigger-name", custom_name, NULL);
 
-  guint64 emitted  = 0; /* count buffers on src */
-  gulong  probe_id = prerec_attach_count_probe(tp.pr, &emitted);
+  guint64 emitted = 0; /* count buffers on src */
+  gulong probe_id = prerec_attach_count_probe(tp.pr, &emitted);
   if (!probe_id)
     FAIL("failed to attach count probe");
 
@@ -61,8 +61,8 @@ int main(int argc, char** argv) {
 
   /* Wait for flush to drain queued buffers - allow more time for all buffers to be pushed */
   guint64 last_emitted = emitted;
-  guint   stable_count = 0;
-  guint   attempts     = 0;
+  guint stable_count = 0;
+  guint attempts = 0;
 
   /* Poll until emission stabilizes (no change for several iterations) or timeout */
   while (attempts < 100 && stable_count < 10) {

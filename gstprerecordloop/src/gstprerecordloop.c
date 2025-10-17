@@ -158,8 +158,8 @@
   G_STMT_START {                                                                                             \
     static gatomicrefcount __seq = 0;                                                                        \
     if (G_LIKELY(obj)) {                                                                                     \
-      guint s    = g_atomic_int_add(&__seq, 1) + 1;                                                          \
-      gint  __rc = GST_MINI_OBJECT_REFCOUNT_VALUE(obj);                                                      \
+      guint s = g_atomic_int_add(&__seq, 1) + 1;                                                             \
+      gint __rc = GST_MINI_OBJECT_REFCOUNT_VALUE(obj);                                                       \
       GST_CAT_LOG(prerec_debug, "PREREC_UNREF seq=%u why=%s obj=%p type=%s ref(before)=%d", s, (why), (obj), \
                   GST_IS_BUFFER(obj) ? "buffer" : (GST_IS_EVENT(obj) ? "event" : "other"), __rc);            \
       prerec_track_unref(NULL, GST_MINI_OBJECT_CAST(obj), why);                                              \
@@ -180,7 +180,7 @@
 
 /* GType registration for flush-on-eos enum */
 GType gst_prerec_flush_on_eos_get_type(void) {
-  static GType            flush_on_eos_type    = 0;
+  static GType flush_on_eos_type = 0;
   static const GEnumValue flush_on_eos_types[] = {
       {GST_PREREC_FLUSH_ON_EOS_AUTO, "Auto (flush only in pass-through mode)", "auto"},
       {GST_PREREC_FLUSH_ON_EOS_ALWAYS, "Always flush on EOS", "always"},
@@ -203,9 +203,9 @@ static gboolean prerec_metrics_enabled = FALSE;
 static inline gboolean prerec_metrics_are_enabled(void) {
   static gboolean checked = FALSE;
   if (!checked) {
-    const gchar* env       = g_getenv("GST_PREREC_METRICS");
+    const gchar* env = g_getenv("GST_PREREC_METRICS");
     prerec_metrics_enabled = (env && (g_strcmp0(env, "1") == 0 || g_ascii_strcasecmp(env, "true") == 0));
-    checked                = TRUE;
+    checked = TRUE;
   }
   return prerec_metrics_enabled;
 }
@@ -329,10 +329,10 @@ static void gst_prerec_get_stats(GstPreRecordLoop* loop, GstPreRecStats* out_sta
 
 typedef struct {
   GstMiniObject* item;
-  gsize          size;
-  gboolean       is_query;
-  gboolean       is_keyframe;
-  guint          gop_id;
+  gsize size;
+  gboolean is_query;
+  gboolean is_keyframe;
+  guint gop_id;
 } GstQueueItem;
 
 /* Tracking data structures only compiled when diagnostics enabled */
@@ -340,7 +340,7 @@ typedef struct {
 /* Sticky event tracking */
 typedef struct _PrerecStickyTrackEntry {
   gpointer event_ptr;
-  guint    store_count;
+  guint store_count;
 } PrerecStickyTrackEntry;
 static GHashTable* prerec_sticky_tracker = NULL; /* key=event ptr */
 
@@ -350,11 +350,11 @@ typedef struct _PrerecLifeEntry {
   gboolean is_event;
   gboolean pushed;
   gboolean unref_logged;
-  guint    push_seq;
-  guint    unref_seq;
+  guint push_seq;
+  guint unref_seq;
 } PrerecLifeEntry;
-static GHashTable*     prerec_life      = NULL; /* key=obj */
-static gatomicrefcount prerec_push_seq  = 0;
+static GHashTable* prerec_life = NULL; /* key=obj */
+static gatomicrefcount prerec_push_seq = 0;
 static gatomicrefcount prerec_unref_seq = 0;
 #endif /* PREREC_ENABLE_LIFE_DIAG */
 
@@ -370,12 +370,12 @@ static void prerec_track_push(GstPreRecordLoop* loop, GstMiniObject* obj, gboole
   prerec_life_init();
   PrerecLifeEntry* e = g_hash_table_lookup(prerec_life, obj);
   if (!e) {
-    e           = g_new0(PrerecLifeEntry, 1);
-    e->obj      = obj;
+    e = g_new0(PrerecLifeEntry, 1);
+    e->obj = obj;
     e->is_event = is_event;
     g_hash_table_insert(prerec_life, obj, e);
   }
-  e->pushed   = TRUE;
+  e->pushed = TRUE;
   e->push_seq = g_atomic_int_add(&prerec_push_seq, 1) + 1;
   GST_CAT_LOG(prerec_debug, "LIFE-PUSH obj=%p type=%s ref=%d why=%s seq=%u", obj, is_event ? "event" : "buffer",
               (int) GST_MINI_OBJECT_REFCOUNT_VALUE(obj), why, e->push_seq);
@@ -396,7 +396,7 @@ static void prerec_track_unref(GstPreRecordLoop* loop, GstMiniObject* obj, const
     return; /* Only interested if it was pushed */
   if (!e->unref_logged) {
     e->unref_logged = TRUE;
-    e->unref_seq    = g_atomic_int_add(&prerec_unref_seq, 1) + 1;
+    e->unref_seq = g_atomic_int_add(&prerec_unref_seq, 1) + 1;
     GST_CAT_LOG(prerec_debug, "LIFE-UNREF obj=%p type=%s ref(before)=%d why=%s push_seq=%u unref_seq=%u", obj,
                 e->is_event ? "event" : "buffer", (int) GST_MINI_OBJECT_REFCOUNT_VALUE(obj), why, e->push_seq,
                 e->unref_seq);
@@ -417,8 +417,8 @@ static void prerec_dump_life(GstPreRecordLoop* loop, const char* phase) {
   if (!prerec_life)
     return;
   GHashTableIter iter;
-  gpointer       key, value;
-  guint          pending = 0, total = 0;
+  gpointer key, value;
+  guint pending = 0, total = 0;
   g_hash_table_iter_init(&iter, prerec_life);
   while (g_hash_table_iter_next(&iter, &key, &value)) {
     PrerecLifeEntry* e = value;
@@ -448,11 +448,11 @@ static void prerec_sticky_tracker_init(void) {
 static void prerec_track_sticky(GstPreRecordLoop* loop, GstEvent* event, const char* why) {
 #if PREREC_ENABLE_LIFE_DIAG
   prerec_sticky_tracker_init();
-  gpointer                key = event;
-  PrerecStickyTrackEntry* e   = g_hash_table_lookup(prerec_sticky_tracker, key);
+  gpointer key = event;
+  PrerecStickyTrackEntry* e = g_hash_table_lookup(prerec_sticky_tracker, key);
   if (!e) {
-    e              = g_new0(PrerecStickyTrackEntry, 1);
-    e->event_ptr   = key;
+    e = g_new0(PrerecStickyTrackEntry, 1);
+    e->event_ptr = key;
     e->store_count = 1;
     g_hash_table_insert(prerec_sticky_tracker, key, e);
     GST_CAT_LOG_OBJECT(prerec_debug, loop, "STICKY-TRACK add event=%p type=%s ref=%d why=%s count=%u", event,
@@ -472,15 +472,15 @@ static void prerec_track_sticky(GstPreRecordLoop* loop, GstEvent* event, const c
 
 static inline void clear_level(GstPreRecSize* level) {
   level->buffers = 0;
-  level->bytes   = 0;
-  level->time    = 0;
+  level->bytes = 0;
+  level->time = 0;
 }
 
 /** Finalize Function */
 
 static void gst_pre_record_loop_finalize(GObject* object) {
   GstPreRecordLoop* prerec = GST_PRERECORDLOOP(object);
-  GstQueueItem*     qitem;
+  GstQueueItem* qitem;
 
   GST_DEBUG_OBJECT(prerec, "finalize pre rec loop");
 
@@ -585,15 +585,15 @@ static void update_time_level(GstPreRecordLoop* loop) {
 
   if (loop->sink_tainted) {
     GST_LOG_OBJECT(loop, "update sink time");
-    loop->sinktime     = segment_to_running_time(&loop->sink_segment, loop->sink_segment.position);
+    loop->sinktime = segment_to_running_time(&loop->sink_segment, loop->sink_segment.position);
     loop->sink_tainted = FALSE;
   }
-  sink_time       = loop->sinktime;
+  sink_time = loop->sinktime;
   sink_start_time = loop->sink_start_time;
 
   if (loop->src_tainted) {
     GST_LOG_OBJECT(loop, "update src time");
-    loop->srctime     = segment_to_running_time(&loop->src_segment, loop->src_segment.position);
+    loop->srctime = segment_to_running_time(&loop->src_segment, loop->src_segment.position);
     loop->src_tainted = FALSE;
   }
   src_time = loop->srctime;
@@ -636,9 +636,9 @@ static void locked_apply_segment(GstPreRecordLoop* loop, GstEvent* event, GstSeg
     /* non-time format, pretent the current time segment is closed with a
      * 0 start and unknown stop time. */
     segment->format = GST_FORMAT_TIME;
-    segment->start  = 0;
-    segment->stop   = -1;
-    segment->time   = 0;
+    segment->start = 0;
+    segment->stop = -1;
+    segment->time = 0;
   }
 
   /* Will be updated on buffer flows */
@@ -681,7 +681,7 @@ static void locked_apply_gap(GstPreRecordLoop* loop, GstEvent* event, GstSegment
 
 /* Apply buffer timestamp/duration to update time level accounting */
 static void locked_apply_buffer(GstPreRecordLoop* loop, GstBuffer* buffer, GstSegment* segment, gboolean is_sink) {
-  GstClockTime duration  = GST_BUFFER_DURATION(buffer);
+  GstClockTime duration = GST_BUFFER_DURATION(buffer);
   GstClockTime timestamp = GST_BUFFER_DTS_OR_PTS(buffer);
 
   /* if no timestamp is set, assume it didn't change compared to the previous
@@ -714,9 +714,9 @@ static void locked_apply_buffer(GstPreRecordLoop* loop, GstBuffer* buffer, GstSe
  * Returns: TRUE if item was dequeued, FALSE if queue is empty
  * out_item: filled with dequeued item data (copied by value to avoid pointer aliasing) */
 static gboolean gst_prerec_locked_dequeue(GstPreRecordLoop* loop, GstQueueItem* out_item) {
-  GstQueueItem*  qitem_ptr;
+  GstQueueItem* qitem_ptr;
   GstMiniObject* item;
-  gsize          buf_size;
+  gsize buf_size;
 
   g_return_val_if_fail(out_item != NULL, FALSE);
 
@@ -739,8 +739,8 @@ static gboolean gst_prerec_locked_dequeue(GstPreRecordLoop* loop, GstQueueItem* 
 
   /* Copy to output parameter to avoid returning internal queue storage pointer (FR-015) */
   *out_item = *qitem_ptr;
-  item      = out_item->item;
-  buf_size  = out_item->size;
+  item = out_item->item;
+  buf_size = out_item->size;
 
   if (item) {
     GST_CAT_LOG_OBJECT(prerec_debug, loop, "DEQUEUE item=%p kind=%s ref=%d gop=%u size=%zu", item,
@@ -810,7 +810,7 @@ static void gst_prerec_locked_flush(GstPreRecordLoop* loop, gboolean full) {
     gst_segment_init(&loop->src_segment, GST_FORMAT_TIME);
     loop->head_needs_discont = loop->tail_needs_discont = FALSE;
     loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
-    loop->sink_start_time          = GST_CLOCK_STIME_NONE;
+    loop->sink_start_time = GST_CLOCK_STIME_NONE;
     loop->sink_tainted = loop->src_tainted = FALSE;
   } else {
     GST_CAT_LOG_OBJECT(prerec_debug, loop, "Partial flush: preserving segment timing state");
@@ -821,21 +821,21 @@ static void gst_prerec_locked_flush(GstPreRecordLoop* loop, gboolean full) {
 
 static inline void gst_prerec_locked_enqueue_buffer(GstPreRecordLoop* loop, gpointer item) {
   GstQueueItem qitem;
-  GstBuffer*   buffer = GST_BUFFER_CAST(item);
-  gsize        bsize  = gst_buffer_get_size(buffer);
+  GstBuffer* buffer = GST_BUFFER_CAST(item);
+  gsize bsize = gst_buffer_get_size(buffer);
 
   /* Ownership: buffer enters with upstream refcount = 1 (exclusive ownership by caller).
    * We do NOT gst_buffer_ref() here; the queue assumes ownership of that single ref.
    * On subsequent push (trigger/EOS) we transfer ownership to downstream. If dropped, we unref in flush/drop paths. */
 
-  qitem.item        = item;
-  qitem.is_query    = FALSE;
+  qitem.item = item;
+  qitem.is_query = FALSE;
   qitem.is_keyframe = !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
   if (qitem.is_keyframe) {
     loop->current_gop_id += 1; /* new GOP enters; implicit count via id diff */
   }
   qitem.gop_id = loop->current_gop_id;
-  qitem.size   = bsize;
+  qitem.size = bsize;
   if (gst_vec_deque_get_length(loop->queue) == 0 || loop->cur_level.buffers == 0) {
     if (!qitem.is_keyframe) {
       GST_CAT_ERROR_OBJECT(prerec_dataflow, loop, "Adding first buffer to queue but it is not a keyframe");
@@ -854,7 +854,7 @@ static inline void gst_prerec_locked_enqueue_buffer(GstPreRecordLoop* loop, gpoi
 
 static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop* loop, gpointer item) {
   GstQueueItem qitem;
-  GstEvent*    event = GST_EVENT_CAST(item);
+  GstEvent* event = GST_EVENT_CAST(item);
 
   /* Ownership: caller passed an event we have just gst_event_ref()'d for SEGMENT/GAP in sink_event handler.
    * This function only queues SEGMENT and GAP events (EOS is handled directly in sink_event handler).
@@ -878,10 +878,10 @@ static inline void gst_prerec_locked_enqueue_event(GstPreRecordLoop* loop, gpoin
                            GST_EVENT_TYPE_NAME(event));
     break;
   }
-  qitem.item        = item;
-  qitem.is_query    = FALSE;
+  qitem.item = item;
+  qitem.is_query = FALSE;
   qitem.is_keyframe = FALSE;
-  qitem.size        = 0;
+  qitem.size = 0;
   gst_vec_deque_push_tail_struct(loop->queue, &qitem);
   GST_PREREC_SIGNAL_ADD(loop);
 }
@@ -906,10 +906,10 @@ static void drop_last_item(GstPreRecordLoop* loop) {
 }
 
 static void gst_prerec_locked_drop(GstPreRecordLoop* loop) {
-  gboolean done            = FALSE;
-  guint    id_to_remove    = loop->last_gop_id;
-  guint    events_dropped  = 0;
-  guint    buffers_dropped = 0;
+  gboolean done = FALSE;
+  guint id_to_remove = loop->last_gop_id;
+  guint events_dropped = 0;
+  guint buffers_dropped = 0;
   // Lets get to the starting point
   gboolean at_first = FALSE;
   GST_CAT_INFO(prerec_debug, "Will Attempt to drop items");
@@ -923,7 +923,7 @@ static void gst_prerec_locked_drop(GstPreRecordLoop* loop) {
       }
       if (GST_IS_BUFFER(item)) {
         GstBuffer* buffer = GST_BUFFER_CAST(item);
-        gboolean   remove = FALSE;
+        gboolean remove = FALSE;
         if (!qitem->is_keyframe) {
           GST_CAT_ERROR_OBJECT(prerec_dataflow, loop, "Expecting a key frame but its not gop_id: %d", qitem->gop_id);
           remove = TRUE;
@@ -978,7 +978,7 @@ static void gst_prerec_locked_drop(GstPreRecordLoop* loop) {
           }
           GST_CAT_DEBUG_OBJECT(prerec_dataflow, loop, "Droppped a Gop");
           loop->last_gop_id = qitem->gop_id;
-          done              = TRUE;
+          done = TRUE;
         }
       }
     } else {
@@ -1031,7 +1031,7 @@ static inline gboolean gst_prerec_should_prune(GstPreRecordLoop* loop) {
  */
 static GstFlowReturn gst_pre_record_loop_chain(GstPad* pad, GstObject* parent, GstBuffer* buffer) {
   GstPreRecordLoop* loop = GST_PREREC_CAST(parent);
-  GstClockTime      duration, timestamp;
+  GstClockTime duration, timestamp;
 
   GST_PREREC_MUTEX_LOCK_CHECK(loop, out_flushing);
   GST_CAT_INFO_OBJECT(prerec_debug, loop, "Chain Function");
@@ -1045,8 +1045,8 @@ static GstFlowReturn gst_pre_record_loop_chain(GstPad* pad, GstObject* parent, G
     goto out_eos;
   }
 
-  timestamp            = GST_BUFFER_DTS_OR_PTS(buffer);
-  duration             = GST_BUFFER_DURATION(buffer);
+  timestamp = GST_BUFFER_DTS_OR_PTS(buffer);
+  duration = GST_BUFFER_DURATION(buffer);
   gboolean is_keyframe = !(GST_BUFFER_FLAGS(buffer) & GST_BUFFER_FLAG_DELTA_UNIT);
 
   GST_CAT_LOG_OBJECT(prerec_dataflow, loop,
@@ -1086,7 +1086,7 @@ static GstFlowReturn gst_pre_record_loop_chain(GstPad* pad, GstObject* parent, G
 
     /* Update live stats snapshot after enqueue/prune */
     loop->stats.queued_buffers_cur = loop->cur_level.buffers;
-    loop->stats.queued_gops_cur    = gst_prerec_queued_gops(loop);
+    loop->stats.queued_gops_cur = gst_prerec_queued_gops(loop);
 
     GST_PREREC_MUTEX_UNLOCK(loop);
     return GST_FLOW_OK;
@@ -1113,7 +1113,7 @@ out_eos:
 /* this function handles sink events */
 static gboolean gst_pre_record_loop_sink_event(GstPad* pad, GstObject* parent, GstEvent* event) {
   GstPreRecordLoop* loop;
-  gboolean          ret = FALSE;
+  gboolean ret = FALSE;
 
   loop = GST_PRERECORDLOOP(parent);
   GST_LOG_OBJECT(loop, "Received %s event: %" GST_PTR_FORMAT, GST_EVENT_TYPE_NAME(event), event);
@@ -1156,7 +1156,7 @@ static gboolean gst_pre_record_loop_sink_event(GstPad* pad, GstObject* parent, G
       /* Reset GOP tracking after draining queue completely */
       loop->current_gop_id = loop->last_gop_id = 0;
       /* Update stats to reflect empty queue */
-      loop->stats.queued_gops_cur    = 0;
+      loop->stats.queued_gops_cur = 0;
       loop->stats.queued_buffers_cur = 0;
     } else if (!gst_vec_deque_is_empty(loop->queue)) {
       GST_CAT_LOG_OBJECT(prerec_dataflow, loop, "EOS: discarding queue (policy=%d mode=%d)", loop->flush_on_eos,
@@ -1166,7 +1166,7 @@ static gboolean gst_pre_record_loop_sink_event(GstPad* pad, GstObject* parent, G
        * but explicitly reset here for clarity */
       loop->current_gop_id = loop->last_gop_id = 0;
       /* Update stats to reflect empty queue */
-      loop->stats.queued_gops_cur    = 0;
+      loop->stats.queued_gops_cur = 0;
       loop->stats.queued_buffers_cur = 0;
     }
     GST_PREREC_MUTEX_UNLOCK(loop);
@@ -1179,8 +1179,8 @@ static gboolean gst_pre_record_loop_sink_event(GstPad* pad, GstObject* parent, G
     gst_event_parse_caps(event, &caps);
     /* do something with the caps */
     if (caps && gst_caps_is_fixed(caps)) {
-      const GstStructure* str        = gst_caps_get_structure(caps, 0);
-      const gchar*        media_type = gst_structure_get_name(str);
+      const GstStructure* str = gst_caps_get_structure(caps, 0);
+      const gchar* media_type = gst_structure_get_name(str);
       GST_LOG_OBJECT(loop, "Media Type: %s", media_type);
       GST_INFO_OBJECT(loop, "Received caps: %" GST_PTR_FORMAT, caps);
     }
@@ -1200,10 +1200,10 @@ static gboolean gst_pre_record_loop_sink_event(GstPad* pad, GstObject* parent, G
 
     /* Reset GOP tracking */
     loop->current_gop_id = 0;
-    loop->last_gop_id    = 0;
+    loop->last_gop_id = 0;
 
     /* Reset stats counters for queue state */
-    loop->stats.queued_gops_cur    = 0;
+    loop->stats.queued_gops_cur = 0;
     loop->stats.queued_buffers_cur = 0;
 
     /* Set srcresult to FLUSHING to stop any pending operations */
@@ -1233,7 +1233,7 @@ static gboolean gst_pre_record_loop_sink_event(GstPad* pad, GstObject* parent, G
       gst_segment_init(&loop->sink_segment, GST_FORMAT_TIME);
       gst_segment_init(&loop->src_segment, GST_FORMAT_TIME);
       loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
-      loop->sink_start_time          = GST_CLOCK_STIME_NONE;
+      loop->sink_start_time = GST_CLOCK_STIME_NONE;
       loop->sink_tainted = loop->src_tainted = FALSE;
     }
 
@@ -1249,7 +1249,7 @@ static gboolean gst_pre_record_loop_sink_event(GstPad* pad, GstObject* parent, G
 
   case GST_EVENT_CUSTOM_DOWNSTREAM: {
     const GstStructure* structure = gst_event_get_structure(event);
-    const gchar*        expected  = loop->flush_trigger_name ? loop->flush_trigger_name : "prerecord-flush";
+    const gchar* expected = loop->flush_trigger_name ? loop->flush_trigger_name : "prerecord-flush";
     if (structure && gst_structure_has_name(structure, expected)) {
       GST_CAT_INFO_OBJECT(prerec_debug, loop, "Received flush trigger '%s'", expected);
       GST_PREREC_MUTEX_LOCK(loop);
@@ -1364,16 +1364,16 @@ static gboolean gst_pre_record_loop_src_event(GstPad* pad, GstObject* parent, Gs
       if (loop->mode == GST_PREREC_MODE_PASS_THROUGH) {
         /* Increment rearm counter (T026) */
         loop->stats.rearm_count++;
-        loop->mode              = GST_PREREC_MODE_BUFFERING;
-        loop->current_gop_id    = 0;
-        loop->last_gop_id       = 0;
-        loop->cur_level.time    = 0;
+        loop->mode = GST_PREREC_MODE_BUFFERING;
+        loop->current_gop_id = 0;
+        loop->last_gop_id = 0;
+        loop->cur_level.time = 0;
         loop->cur_level.buffers = 0;
-        loop->cur_level.bytes   = 0;
+        loop->cur_level.bytes = 0;
         gst_segment_init(&loop->sink_segment, GST_FORMAT_TIME);
         gst_segment_init(&loop->src_segment, GST_FORMAT_TIME);
         loop->sinktime = loop->srctime = GST_CLOCK_STIME_NONE;
-        loop->sink_start_time          = GST_CLOCK_STIME_NONE;
+        loop->sink_start_time = GST_CLOCK_STIME_NONE;
         loop->sink_tainted = loop->src_tainted = FALSE;
         /* T027: Log state transition with stats snapshot */
         GST_CAT_INFO_OBJECT(prerec_debug, loop,
@@ -1430,8 +1430,8 @@ static gboolean gst_pre_record_loop_src_query(GstPad* pad, GstObject* parent, Gs
 
 static gboolean gst_pre_record_loop_src_activate_mode(GstPad* pad, GstObject* parent, GstPadMode mode,
                                                       gboolean active) {
-  gboolean          result = FALSE;
-  GstPreRecordLoop* loop   = GST_PRERECORDLOOP(parent);
+  gboolean result = FALSE;
+  GstPreRecordLoop* loop = GST_PRERECORDLOOP(parent);
 
   switch (mode) {
   case GST_PAD_MODE_PUSH:
@@ -1439,7 +1439,7 @@ static gboolean gst_pre_record_loop_src_activate_mode(GstPad* pad, GstObject* pa
       GST_CAT_INFO(prerec_debug, "Source pad activated - no task needed for passthrough");
       GST_PREREC_MUTEX_LOCK(loop);
       loop->srcresult = GST_FLOW_OK;
-      loop->eos       = FALSE;
+      loop->eos = FALSE;
       GST_PREREC_MUTEX_UNLOCK(loop);
       result = TRUE;
     } else {
@@ -1460,7 +1460,7 @@ static gboolean gst_pre_record_loop_src_activate_mode(GstPad* pad, GstObject* pa
 
 static gboolean gst_pre_record_loop_sink_activate_mode(GstPad* pad, GstObject* parent, GstPadMode mode,
                                                        gboolean active) {
-  gboolean          result;
+  gboolean result;
   GstPreRecordLoop* loop = GST_PRERECORDLOOP(parent);
 
   switch (mode) {
@@ -1468,7 +1468,7 @@ static gboolean gst_pre_record_loop_sink_activate_mode(GstPad* pad, GstObject* p
     if (active) {
       GST_PREREC_MUTEX_LOCK(loop);
       loop->srcresult = GST_FLOW_OK;
-      loop->eos       = FALSE;
+      loop->eos = FALSE;
       GST_PREREC_MUTEX_UNLOCK(loop);
     } else {
       /* step 1, unblock the chan function */
@@ -1497,7 +1497,7 @@ static gboolean gst_pre_record_loop_sink_activate_mode(GstPad* pad, GstObject* p
 static GstStateChangeReturn gst_pre_record_loop_change_state(GstElement* element, GstStateChange transition) {
 
   GstStateChangeReturn ret;
-  GstPreRecordLoop*    loop = GST_PRERECORDLOOP(element);
+  GstPreRecordLoop* loop = GST_PRERECORDLOOP(element);
 
   switch (transition) {
   case GST_STATE_CHANGE_NULL_TO_READY:
@@ -1513,7 +1513,7 @@ static GstStateChangeReturn gst_pre_record_loop_change_state(GstElement* element
 
 static gboolean gst_pre_record_loop_sink_query(GstPad* pad, GstObject* parent, GstQuery* query) {
   GstPreRecordLoop* loop = GST_PRERECORDLOOP(parent);
-  gboolean          ret  = FALSE;
+  gboolean ret = FALSE;
 
   switch (GST_QUERY_TYPE(query)) {
   case GST_QUERY_CAPS: {
@@ -1538,7 +1538,7 @@ static gboolean gst_pre_record_loop_sink_query(GstPad* pad, GstObject* parent, G
 
     gst_query_parse_accept_caps(query, &caps);
     template_caps = gst_pad_get_pad_template_caps(pad);
-    ret           = gst_caps_is_subset(caps, template_caps);
+    ret = gst_caps_is_subset(caps, template_caps);
     gst_caps_unref(template_caps);
     gst_query_set_accept_caps_result(query, ret);
     break;
@@ -1553,7 +1553,7 @@ static gboolean gst_pre_record_loop_sink_query(GstPad* pad, GstObject* parent, G
 
 /* initialize the prerecordloop's class */
 static void gst_pre_record_loop_class_init(GstPreRecordLoopClass* klass) {
-  GObjectClass*    gobject_class    = G_OBJECT_CLASS(klass);
+  GObjectClass* gobject_class = G_OBJECT_CLASS(klass);
   GstElementClass* gstelement_class = GST_ELEMENT_CLASS(klass);
 
   gobject_class->set_property = gst_pre_record_loop_set_property;
@@ -1703,8 +1703,8 @@ static void gst_pre_record_loop_init(GstPreRecordLoop* filter) {
 
   // Initialize buffer size limits
   filter->max_size.buffers = DEFAULT_MAX_SIZE_BUFFERS;
-  filter->max_size.bytes   = DEFAULT_MAX_SIZE_BYTES;
-  filter->max_size.time    = DEFAULT_MAX_SIZE_TIME;
+  filter->max_size.bytes = DEFAULT_MAX_SIZE_BYTES;
+  filter->max_size.time = DEFAULT_MAX_SIZE_TIME;
   clear_level(&filter->cur_level);
 
   // Initialize segments
@@ -1713,20 +1713,20 @@ static void gst_pre_record_loop_init(GstPreRecordLoop* filter) {
 
   // Initialize timing
   filter->sinktime = filter->srctime = GST_CLOCK_STIME_NONE;
-  filter->sink_start_time            = GST_CLOCK_STIME_NONE;
+  filter->sink_start_time = GST_CLOCK_STIME_NONE;
   filter->sink_tainted = filter->src_tainted = FALSE;
 
   GST_DEBUG_OBJECT(filter, "Initialized PreRecLoop");
   filter->mode = GST_PREREC_MODE_BUFFERING;
 
   filter->current_gop_id = 0;
-  filter->gop_size       = 0;
-  filter->last_gop_id    = 0;
-  filter->num_gops       = 0;
-  filter->preroll_sent   = FALSE;
+  filter->gop_size = 0;
+  filter->last_gop_id = 0;
+  filter->num_gops = 0;
+  filter->preroll_sent = FALSE;
   /* init stats */
   memset(&filter->stats, 0, sizeof(filter->stats));
-  filter->flush_on_eos       = GST_PREREC_FLUSH_ON_EOS_AUTO;
+  filter->flush_on_eos = GST_PREREC_FLUSH_ON_EOS_AUTO;
   filter->flush_trigger_name = NULL;
 }
 

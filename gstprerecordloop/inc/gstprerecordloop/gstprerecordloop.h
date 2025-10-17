@@ -70,8 +70,8 @@ G_DECLARE_FINAL_TYPE(GstPreRecordLoop, gst_pre_record_loop, GST, PRERECORDLOOP, 
 #define GST_PREREC_CAST(obj) ((GstPreRecordLoop*) (obj))
 
 typedef struct _GstPreRecSize {
-  guint   buffers;
-  guint   bytes;
+  guint buffers;
+  guint bytes;
   guint64 time;
 } GstPreRecSize;
 
@@ -91,7 +91,7 @@ typedef struct _GstPreRecStats {
 typedef struct _GstPreRecordLoop {
   GstElement element;
 
-  GstPad *   sinkpad, *srcpad;
+  GstPad *sinkpad, *srcpad;
   GstSegment sink_segment;
   GstSegment src_segment;
 
@@ -103,14 +103,14 @@ typedef struct _GstPreRecordLoop {
 
   /* flowreturn when srcpad is paused */
   GstFlowReturn srcresult;
-  gboolean      unexpected;
-  gboolean      eos;
+  gboolean unexpected;
+  gboolean eos;
 
-  GMutex   lock;
+  GMutex lock;
   gboolean waiting_add;
-  GCond    item_add;
+  GCond item_add;
   gboolean waiting_del;
-  GCond    item_del;
+  GCond item_del;
 
   /* the queue of data */
   GstVecDeque* queue;
@@ -128,11 +128,11 @@ typedef struct _GstPreRecordLoop {
   guint num_gops;
 
   GstPreRecLoopMode mode;
-  gboolean          head_needs_discont;
-  gboolean          tail_needs_discont;
+  gboolean head_needs_discont;
+  gboolean tail_needs_discont;
 
   GstPreRecFlushOnEos flush_on_eos;
-  gboolean            preroll_sent;
+  gboolean preroll_sent;
 
   /* custom downstream event name that triggers flush (allocated) */
   gchar* flush_trigger_name;

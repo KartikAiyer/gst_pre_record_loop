@@ -44,8 +44,8 @@ gboolean prerec_pipeline_create(PrerecTestPipeline* out, const char* name_prefix
   const char* prefix = name_prefix ? name_prefix : "prerec";
 
   out->pipeline = gst_pipeline_new(prefix);
-  out->appsrc   = gst_element_factory_make("appsrc", "src");
-  out->pr       = prerec_create_element();
+  out->appsrc = gst_element_factory_make("appsrc", "src");
+  out->pr = prerec_create_element();
   out->fakesink = gst_element_factory_make("fakesink", NULL);
   if (!out->pipeline || !out->appsrc || !out->pr || !out->fakesink)
     goto fail;
@@ -63,7 +63,7 @@ gboolean prerec_pipeline_create(PrerecTestPipeline* out, const char* name_prefix
   if (gst_element_set_state(out->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
     goto fail;
   /* Wait until actually in PLAYING (avoid racing queries/pushes). */
-  GstState             cur, pend;
+  GstState cur, pend;
   GstStateChangeReturn scr = gst_element_get_state(out->pipeline, &cur, &pend, 2 * GST_SECOND);
   if (scr == GST_STATE_CHANGE_FAILURE)
     goto fail;
@@ -138,16 +138,16 @@ gboolean prerec_push_gop(GstElement* appsrc, guint delta_count, guint64* pts_bas
     return FALSE;
   guint64 pts = *pts_base_ns;
   // Keyframe
-  GstBuffer* k           = gst_buffer_new();
-  GST_BUFFER_PTS(k)      = pts;
+  GstBuffer* k = gst_buffer_new();
+  GST_BUFFER_PTS(k) = pts;
   GST_BUFFER_DURATION(k) = duration_ns;
   if (gst_app_src_push_buffer(GST_APP_SRC(appsrc), k) != GST_FLOW_OK) {
     return FALSE;
   }
   pts += duration_ns;
   for (guint i = 0; i < delta_count; ++i) {
-    GstBuffer* d           = gst_buffer_new();
-    GST_BUFFER_PTS(d)      = pts;
+    GstBuffer* d = gst_buffer_new();
+    GST_BUFFER_PTS(d) = pts;
     GST_BUFFER_DURATION(d) = duration_ns;
     GST_BUFFER_FLAG_SET(d, GST_BUFFER_FLAG_DELTA_UNIT);
     if (gst_app_src_push_buffer(GST_APP_SRC(appsrc), d) != GST_FLOW_OK) {
@@ -165,13 +165,13 @@ gboolean prerec_wait_for_stats(GstElement* pr, guint min_gops, guint min_drops_g
   if (!pr)
     return FALSE;
   const guint step_ms = 5;
-  guint       waited  = 0;
+  guint waited = 0;
   while (waited <= timeout_ms) {
-    GstQuery* q  = gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("prerec-stats"));
-    gboolean  ok = gst_element_query(pr, q);
+    GstQuery* q = gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("prerec-stats"));
+    gboolean ok = gst_element_query(pr, q);
     if (ok) {
-      const GstStructure* s  = gst_query_get_structure(q);
-      guint               qg = 0, dg = 0;
+      const GstStructure* s = gst_query_get_structure(q);
+      guint qg = 0, dg = 0;
       gst_structure_get_uint(s, "queued-gops", &qg);
       gst_structure_get_uint(s, "drops-gops", &dg);
       gst_query_unref(q);

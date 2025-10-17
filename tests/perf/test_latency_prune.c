@@ -56,10 +56,10 @@ int main(int argc, char** argv) {
   /* Configure max-time to force pruning: 2 seconds (pipeline already in PLAYING state) */
   g_object_set(tp.pr, "max-time", 2, NULL);
 
-  guint64*      latencies    = g_new0(guint64, NUM_SAMPLES);
-  guint         sample_count = 0;
-  guint64       pts          = 0;
-  const guint64 dur          = GST_MSECOND * 100; /* 100ms per frame, 1s per GOP */
+  guint64* latencies = g_new0(guint64, NUM_SAMPLES);
+  guint sample_count = 0;
+  guint64 pts = 0;
+  const guint64 dur = GST_MSECOND * 100; /* 100ms per frame, 1s per GOP */
 
   g_print("Starting latency benchmark: %d samples with pruning...\n", NUM_SAMPLES);
 
@@ -70,8 +70,8 @@ int main(int argc, char** argv) {
       gst_query_unref(q_before);
       FAIL("stats query failed (before)");
     }
-    const GstStructure* s_before      = gst_query_get_structure(q_before);
-    guint               queued_before = 0;
+    const GstStructure* s_before = gst_query_get_structure(q_before);
+    guint queued_before = 0;
     gst_structure_get_uint(s_before, "queued-buffers", &queued_before);
     gst_query_unref(q_before);
 
@@ -94,8 +94,8 @@ int main(int argc, char** argv) {
       gst_query_unref(q_after);
       FAIL("stats query failed (after)");
     }
-    const GstStructure* s_after      = gst_query_get_structure(q_after);
-    guint               queued_after = 0, drops_gops = 0;
+    const GstStructure* s_after = gst_query_get_structure(q_after);
+    guint queued_after = 0, drops_gops = 0;
     gst_structure_get_uint(s_after, "queued-buffers", &queued_after);
     gst_structure_get_uint(s_after, "drops-gops", &drops_gops);
     gst_query_unref(q_after);
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
 
   /* Calculate statistics */
   guint64 median_ns = calculate_median(latencies, sample_count);
-  guint64 p99_ns    = calculate_percentile_99(latencies, sample_count);
+  guint64 p99_ns = calculate_percentile_99(latencies, sample_count);
 
   /* Calculate min/max for context */
   guint64 min_ns = sample_count > 0 ? latencies[0] : 0;

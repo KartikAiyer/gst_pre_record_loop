@@ -28,20 +28,20 @@
 #define FAIL_PREFIX "T031 FAIL: "
 #include <test_utils.h>
 
-static gboolean    seek_event_received = FALSE;
-static GstSeekType seek_start_type     = GST_SEEK_TYPE_NONE;
-static gint64      seek_start          = -1;
+static gboolean seek_event_received = FALSE;
+static GstSeekType seek_start_type = GST_SEEK_TYPE_NONE;
+static gint64 seek_start = -1;
 
 /* Probe on sink pad to detect SEEK events passing through */
 static GstPadProbeReturn sink_event_probe(GstPad* pad, GstPadProbeInfo* info, gpointer user_data) {
   if (GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_EVENT_UPSTREAM) {
     GstEvent* event = GST_PAD_PROBE_INFO_EVENT(info);
     if (GST_EVENT_TYPE(event) == GST_EVENT_SEEK) {
-      gdouble      rate;
-      GstFormat    format;
+      gdouble rate;
+      GstFormat format;
       GstSeekFlags flags;
-      GstSeekType  stop_type;
-      gint64       stop;
+      GstSeekType stop_type;
+      gint64 stop;
 
       gst_event_parse_seek(event, &rate, &format, &flags, &seek_start_type, &seek_start, &stop_type, &stop);
 
@@ -122,8 +122,8 @@ int main(int argc, char* argv[]) {
   g_print("T031: Test 2 - SEEK in PASS_THROUGH mode\n");
 
   /* Send flush trigger to enter PASS_THROUGH mode */
-  GstStructure* flush_struct  = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_struct);
+  GstStructure* flush_struct = gst_structure_new_empty("prerecord-flush");
+  GstEvent* flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_struct);
   gst_pad_send_event(sink, flush_trigger);
 
   /* Wait for mode transition */

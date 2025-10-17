@@ -22,10 +22,10 @@ int main(int argc, char** argv) {
   if (!prerec_pipeline_create(&tp, "t022-pipeline"))
     FAIL("pipeline create failed");
 
-  guint64       ts       = 0;
-  const guint64 per_buf  = GST_SECOND; /* 1s */
-  guint64       emitted  = 0;
-  gulong        probe_id = prerec_attach_count_probe(tp.pr, &emitted);
+  guint64 ts = 0;
+  const guint64 per_buf = GST_SECOND; /* 1s */
+  guint64 emitted = 0;
+  gulong probe_id = prerec_attach_count_probe(tp.pr, &emitted);
   if (!probe_id)
     FAIL("probe attach failed");
   guint64 baseline = emitted;
@@ -39,8 +39,8 @@ int main(int argc, char** argv) {
   }
 
   /* First flush event: send downstream from prerecord element context */
-  GstStructure* s      = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush1 = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+  GstStructure* s = gst_structure_new_empty("prerecord-flush");
+  GstEvent* flush1 = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
   if (!gst_element_send_event(tp.pr, flush1)) {
     FAIL("first flush event send failed");
   }
@@ -55,8 +55,8 @@ int main(int argc, char** argv) {
     FAIL("flush did not emit any buffers");
 
   /* Second flush trigger (should be ignored) */
-  GstStructure* s2     = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush2 = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s2);
+  GstStructure* s2 = gst_structure_new_empty("prerecord-flush");
+  GstEvent* flush2 = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s2);
   gst_element_send_event(tp.pr, flush2);
   /* Short wait to see if any unexpected emission occurs */
   for (int i = 0; i < 5; ++i) {
@@ -75,8 +75,8 @@ int main(int argc, char** argv) {
     gst_query_unref(q);
     FAIL("stats query failed");
   }
-  const GstStructure* st             = gst_query_get_structure(q);
-  guint               queued_buffers = 999;
+  const GstStructure* st = gst_query_get_structure(q);
+  guint queued_buffers = 999;
   gst_structure_get_uint(st, "queued-buffers", &queued_buffers);
   gst_query_unref(q);
   if (queued_buffers != 0)

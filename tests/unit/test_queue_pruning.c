@@ -27,15 +27,15 @@ int main(int argc, char** argv) {
    */
   g_object_set(tp.pr, "max-time", 11, NULL);
 
-  guint64       ts             = 0;
-  const guint64 per_buf        = 1 * GST_SECOND; /* 1s per frame */
-  const guint   deltas_per_gop = 4;              /* => GOP = 5 seconds */
+  guint64 ts = 0;
+  const guint64 per_buf = 1 * GST_SECOND; /* 1s per frame */
+  const guint deltas_per_gop = 4;         /* => GOP = 5 seconds */
 
   /* Pre-roll: push a single keyframe buffer so element switches to BUFFERING
    * before we start counting GOPs for pruning assertions. */
   {
-    GstBuffer* preroll           = gst_buffer_new();
-    GST_BUFFER_PTS(preroll)      = ts;
+    GstBuffer* preroll = gst_buffer_new();
+    GST_BUFFER_PTS(preroll) = ts;
     GST_BUFFER_DURATION(preroll) = per_buf;
     if (gst_app_src_push_buffer(GST_APP_SRC(tp.appsrc), preroll) != GST_FLOW_OK)
       FAIL("preroll push failed");
@@ -58,8 +58,8 @@ int main(int argc, char** argv) {
     gst_query_unref(q);
     FAIL("stats query failed");
   }
-  const GstStructure* s          = gst_query_get_structure(q);
-  guint               drops_gops = 0, drops_buffers = 0, queued_gops = 0, queued_buffers = 0;
+  const GstStructure* s = gst_query_get_structure(q);
+  guint drops_gops = 0, drops_buffers = 0, queued_gops = 0, queued_buffers = 0;
   gst_structure_get_uint(s, "drops-gops", &drops_gops);
   gst_structure_get_uint(s, "drops-buffers", &drops_buffers);
   gst_structure_get_uint(s, "queued-gops", &queued_gops);

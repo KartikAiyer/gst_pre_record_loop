@@ -15,7 +15,7 @@
 #include <test_utils.h>
 
 static gboolean flush_start_seen = FALSE;
-static gboolean flush_stop_seen  = FALSE;
+static gboolean flush_stop_seen = FALSE;
 
 static GstPadProbeReturn downstream_event_probe(GstPad* pad, GstPadProbeInfo* info, gpointer user_data) {
   if (GST_PAD_PROBE_INFO_TYPE(info) & (GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM | GST_PAD_PROBE_TYPE_EVENT_FLUSH)) {
@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
   }
 
   GstPad* sink = gst_element_get_static_pad(p.pr, "sink");
-  GstPad* src  = gst_element_get_static_pad(p.pr, "src");
+  GstPad* src = gst_element_get_static_pad(p.pr, "src");
   if (!sink || !src) {
     if (sink)
       gst_object_unref(sink);
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
                     NULL, NULL);
 
   guint64 flushed_buffers = 0;
-  gulong  buffer_probe    = prerec_attach_count_probe(p.pr, &flushed_buffers);
+  gulong buffer_probe = prerec_attach_count_probe(p.pr, &flushed_buffers);
 
   guint64 pts = 0;
   if (!prerec_push_gop(p.appsrc, 2, &pts, GST_SECOND, NULL)) {
@@ -91,8 +91,8 @@ int main(int argc, char* argv[]) {
     FAIL("Failed to query initial stats");
   }
 
-  const GstStructure* s           = gst_query_get_structure(q);
-  guint               queued_gops = 0, queued_buffers = 0;
+  const GstStructure* s = gst_query_get_structure(q);
+  guint queued_gops = 0, queued_buffers = 0;
   gst_structure_get_uint(s, "queued-gops", &queued_gops);
   gst_structure_get_uint(s, "queued-buffers", &queued_buffers);
   gst_query_unref(q);
@@ -169,7 +169,7 @@ int main(int argc, char* argv[]) {
 
   /* Reset flags for next flush cycle */
   flush_start_seen = FALSE;
-  flush_stop_seen  = FALSE;
+  flush_stop_seen = FALSE;
 
   /* Send another FLUSH_START */
   flush_start = gst_event_new_flush_start();
@@ -196,9 +196,9 @@ int main(int argc, char* argv[]) {
   GstFlowReturn push_result = GST_FLOW_OK;
 
   /* Push a keyframe buffer directly to test chain function behavior */
-  GstBuffer* test_buf           = gst_buffer_new_allocate(NULL, 1024, NULL);
-  GST_BUFFER_PTS(test_buf)      = pts;
-  GST_BUFFER_DTS(test_buf)      = pts;
+  GstBuffer* test_buf = gst_buffer_new_allocate(NULL, 1024, NULL);
+  GST_BUFFER_PTS(test_buf) = pts;
+  GST_BUFFER_DTS(test_buf) = pts;
   GST_BUFFER_DURATION(test_buf) = GST_SECOND;
   /* Mark as keyframe (no DELTA_UNIT flag) */
   GST_BUFFER_FLAG_UNSET(test_buf, GST_BUFFER_FLAG_DELTA_UNIT);
@@ -262,9 +262,9 @@ int main(int argc, char* argv[]) {
 
   GstSegment segment;
   gst_segment_init(&segment, GST_FORMAT_TIME);
-  segment.start           = 0;
-  segment.time            = 0;
-  segment.position        = 0;
+  segment.start = 0;
+  segment.time = 0;
+  segment.position = 0;
   GstEvent* segment_event = gst_event_new_segment(&segment);
   if (!gst_pad_send_event(sink, segment_event)) {
     gst_object_unref(src);
@@ -287,9 +287,9 @@ int main(int argc, char* argv[]) {
     FAIL("Post-seek GOP did not queue");
   }
 
-  flushed_buffers              = 0;
+  flushed_buffers = 0;
   GstStructure* trigger_struct = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush_trigger  = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, trigger_struct);
+  GstEvent* flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, trigger_struct);
   if (!gst_pad_send_event(sink, flush_trigger)) {
     gst_object_unref(src);
     gst_object_unref(sink);

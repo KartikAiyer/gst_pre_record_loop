@@ -6,9 +6,9 @@ static GstElement* g_pipeline = nullptr;
 
 // Structure to track frame count and trigger flush
 typedef struct {
-  guint       frame_count;
+  guint frame_count;
   GstElement* prerecordloop;
-  gboolean    flush_sent;
+  gboolean flush_sent;
 } ProbeData;
 
 // Signal handler for Ctrl-C
@@ -106,11 +106,11 @@ static GstElement* create_pipeline() {
 
 int main(int argc, char* argv[]) {
   GstElement* pipeline;
-  GstBus*     bus;
+  GstBus* bus;
   GstMessage* msg;
-  GError*     error = NULL;
+  GError* error = NULL;
 
-    // Initialize GStreamer
+  // Initialize GStreamer
   gst_init(&argc, &argv);
 
   // Create pipeline
@@ -125,8 +125,8 @@ int main(int argc, char* argv[]) {
 
   // Get reference to the prerecordloop element for property access and event sending
   GstElement* prerecordloop = NULL;
-  GstElement* videotestsrc  = NULL;
-  ProbeData   probe_data    = {0, NULL, FALSE};
+  GstElement* videotestsrc = NULL;
+  ProbeData probe_data = {0, NULL, FALSE};
 
 #ifndef AS_MP4
   // Only get the element if we're using the prerecordloop pipeline
@@ -159,9 +159,9 @@ int main(int argc, char* argv[]) {
   }
 
   // Initialize probe data
-  probe_data.frame_count   = 0;
+  probe_data.frame_count = 0;
   probe_data.prerecordloop = prerecordloop;
-  probe_data.flush_sent    = FALSE;
+  probe_data.flush_sent = FALSE;
 
   // Add probe to count buffers
   gst_pad_add_probe(src_pad, GST_PAD_PROBE_TYPE_BUFFER, frame_counter_probe, &probe_data, NULL);
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]) {
   // Print error message if any
   if (msg != NULL) {
     GError* err;
-    gchar*  debug_info;
+    gchar* debug_info;
 
     switch (GST_MESSAGE_TYPE(msg)) {
     case GST_MESSAGE_ERROR:

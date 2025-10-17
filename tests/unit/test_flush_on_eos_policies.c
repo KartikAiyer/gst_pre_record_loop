@@ -39,7 +39,7 @@ static int test_always_buffering(void) {
   /* Set policy to ALWAYS (1) */
   g_object_set(tp.pr, "flush-on-eos", 1, NULL);
 
-  guint64       ts    = 0;
+  guint64 ts = 0;
   const guint64 delta = GST_SECOND;
 
   /* Push 3 GOPs while in BUFFERING mode */
@@ -52,8 +52,8 @@ static int test_always_buffering(void) {
   GstQuery* q = gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("prerec-stats"));
   if (!gst_element_query(tp.pr, q))
     FAIL("stats query failed");
-  const GstStructure* s           = gst_query_get_structure(q);
-  guint               queued_gops = 0;
+  const GstStructure* s = gst_query_get_structure(q);
+  guint queued_gops = 0;
   gst_structure_get_uint(s, "queued-gops", &queued_gops);
   gst_query_unref(q);
 
@@ -77,8 +77,8 @@ static int test_always_buffering(void) {
   GstQuery* q2 = gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("prerec-stats"));
   if (!gst_element_query(tp.pr, q2))
     FAIL("stats query after EOS failed");
-  const GstStructure* s2                = gst_query_get_structure(q2);
-  guint               queued_gops_after = 0, queued_buffers_after = 0;
+  const GstStructure* s2 = gst_query_get_structure(q2);
+  guint queued_gops_after = 0, queued_buffers_after = 0;
   gst_structure_get_uint(s2, "queued-gops", &queued_gops_after);
   gst_structure_get_uint(s2, "queued-buffers", &queued_buffers_after);
   gst_query_unref(q2);
@@ -103,7 +103,7 @@ static int test_never_buffering(void) {
   /* Set policy to NEVER (2) */
   g_object_set(tp.pr, "flush-on-eos", 2, NULL);
 
-  guint64       ts    = 0;
+  guint64 ts = 0;
   const guint64 delta = GST_SECOND;
 
   /* Push 3 GOPs while in BUFFERING mode */
@@ -116,8 +116,8 @@ static int test_never_buffering(void) {
   GstQuery* q = gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("prerec-stats"));
   if (!gst_element_query(tp.pr, q))
     FAIL("stats query failed");
-  const GstStructure* s           = gst_query_get_structure(q);
-  guint               queued_gops = 0;
+  const GstStructure* s = gst_query_get_structure(q);
+  guint queued_gops = 0;
   gst_structure_get_uint(s, "queued-gops", &queued_gops);
   gst_query_unref(q);
 
@@ -141,8 +141,8 @@ static int test_never_buffering(void) {
   GstQuery* q2 = gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("prerec-stats"));
   if (!gst_element_query(tp.pr, q2))
     FAIL("stats query after EOS failed");
-  const GstStructure* s2                = gst_query_get_structure(q2);
-  guint               queued_gops_after = 0, queued_buffers_after = 0;
+  const GstStructure* s2 = gst_query_get_structure(q2);
+  guint queued_gops_after = 0, queued_buffers_after = 0;
   gst_structure_get_uint(s2, "queued-gops", &queued_gops_after);
   gst_structure_get_uint(s2, "queued-buffers", &queued_buffers_after);
   gst_query_unref(q2);
@@ -167,7 +167,7 @@ static int test_always_passthrough(void) {
   /* Set policy to ALWAYS (1) */
   g_object_set(tp.pr, "flush-on-eos", 1, NULL);
 
-  guint64       ts    = 0;
+  guint64 ts = 0;
   const guint64 delta = GST_SECOND;
 
   /* Push 2 GOPs and flush to enter PASS_THROUGH mode */
@@ -177,8 +177,8 @@ static int test_always_passthrough(void) {
   g_usleep(100000);
 
   /* Send flush trigger to enter PASS_THROUGH */
-  GstStructure* flush_st  = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush_evt = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_st);
+  GstStructure* flush_st = gst_structure_new_empty("prerecord-flush");
+  GstEvent* flush_evt = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_st);
   gst_element_send_event(tp.pr, flush_evt);
   g_usleep(200000); /* let flush complete */
 
@@ -199,7 +199,7 @@ static int test_always_passthrough(void) {
   /* Now send EOS with ALWAYS policy in PASS_THROUGH mode
    * Expected: any remaining buffered data should be drained
    * (In pure PASS_THROUGH, queue is empty, so no additional emissions expected) */
-  guint64    before_eos   = emission_count;
+  guint64 before_eos = emission_count;
   GstAppSrc* appsrc_typed = GST_APP_SRC(tp.appsrc);
   gst_app_src_end_of_stream(appsrc_typed);
   g_usleep(200000);
@@ -225,7 +225,7 @@ static int test_never_passthrough(void) {
   /* Set policy to NEVER (2) */
   g_object_set(tp.pr, "flush-on-eos", 2, NULL);
 
-  guint64       ts    = 0;
+  guint64 ts = 0;
   const guint64 delta = GST_SECOND;
 
   /* Push 2 GOPs and flush to enter PASS_THROUGH mode */
@@ -235,8 +235,8 @@ static int test_never_passthrough(void) {
   g_usleep(100000);
 
   /* Send flush trigger to enter PASS_THROUGH */
-  GstStructure* flush_st  = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush_evt = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_st);
+  GstStructure* flush_st = gst_structure_new_empty("prerecord-flush");
+  GstEvent* flush_evt = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_st);
   gst_element_send_event(tp.pr, flush_evt);
   g_usleep(200000);
 
@@ -255,7 +255,7 @@ static int test_never_passthrough(void) {
 
   /* Send EOS with NEVER policy in PASS_THROUGH mode
    * Expected: discard any residual (should be none in pure PASS_THROUGH) */
-  guint64    before_eos   = emission_count;
+  guint64 before_eos = emission_count;
   GstAppSrc* appsrc_typed = GST_APP_SRC(tp.appsrc);
   gst_app_src_end_of_stream(appsrc_typed);
   g_usleep(200000);

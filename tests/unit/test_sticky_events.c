@@ -37,10 +37,10 @@
 #define FAIL_PREFIX "T033 FAIL: "
 #include <test_utils.h>
 
-static gint       segment_events_received = 0;
-static gint       caps_events_received    = 0;
+static gint segment_events_received = 0;
+static gint caps_events_received = 0;
 static GstSegment last_segment;
-static GstCaps*   last_caps = NULL;
+static GstCaps* last_caps = NULL;
 
 /* Probe on src pad to track sticky events */
 static GstPadProbeReturn src_event_probe(GstPad* pad, GstPadProbeInfo* info, gpointer user_data) {
@@ -124,9 +124,9 @@ int main(int argc, char* argv[]) {
   segment_events_received = 0;
   GstSegment segment;
   gst_segment_init(&segment, GST_FORMAT_TIME);
-  segment.start    = 0;
-  segment.stop     = 10 * GST_SECOND;
-  segment.time     = 0;
+  segment.start = 0;
+  segment.stop = 10 * GST_SECOND;
+  segment.time = 0;
   segment.position = 0;
 
   GstEvent* segment_event = gst_event_new_segment(&segment);
@@ -162,7 +162,7 @@ int main(int argc, char* argv[]) {
   g_print("T033: Test 2 - CAPS event stored as sticky in BUFFERING mode\n");
 
   /* Send CAPS event to sink pad */
-  GstCaps*  test_caps  = gst_caps_from_string("video/x-h264,stream-format=byte-stream,alignment=au");
+  GstCaps* test_caps = gst_caps_from_string("video/x-h264,stream-format=byte-stream,alignment=au");
   GstEvent* caps_event = gst_event_new_caps(test_caps);
 
   if (!gst_pad_send_event(sink, caps_event)) {
@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
   gst_event_parse_caps(sticky_caps_check, &stored_caps);
   if (!gst_caps_is_equal(stored_caps, test_caps)) {
     gchar* expected = gst_caps_to_string(test_caps);
-    gchar* actual   = gst_caps_to_string(stored_caps);
+    gchar* actual = gst_caps_to_string(stored_caps);
     gst_event_unref(sticky_caps_check);
     gst_caps_unref(test_caps);
     gst_object_unref(sink);
@@ -222,9 +222,9 @@ int main(int argc, char* argv[]) {
   g_usleep(100000); /* 100ms */
 
   /* Reset counter and trigger flush */
-  segment_events_received     = 0;
-  GstStructure* flush_struct  = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_struct);
+  segment_events_received = 0;
+  GstStructure* flush_struct = gst_structure_new_empty("prerecord-flush");
+  GstEvent* flush_trigger = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, flush_struct);
 
   if (!gst_pad_send_event(sink, flush_trigger)) {
     gst_object_unref(sink);
@@ -308,9 +308,9 @@ int main(int argc, char* argv[]) {
   /* Send a NEW SEGMENT with different timestamps */
   GstSegment new_segment;
   gst_segment_init(&new_segment, GST_FORMAT_TIME);
-  new_segment.start    = 20 * GST_SECOND; /* Different from original (0) */
-  new_segment.stop     = 30 * GST_SECOND; /* Different from original (10s) */
-  new_segment.time     = 20 * GST_SECOND; /* Different from original (0) */
+  new_segment.start = 20 * GST_SECOND; /* Different from original (0) */
+  new_segment.stop = 30 * GST_SECOND;  /* Different from original (10s) */
+  new_segment.time = 20 * GST_SECOND;  /* Different from original (0) */
   new_segment.position = 20 * GST_SECOND;
 
   GstEvent* new_segment_event = gst_event_new_segment(&new_segment);

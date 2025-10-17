@@ -15,21 +15,21 @@
 #include <stdio.h>
 
 static gboolean send_flush(GstElement* pr) {
-  GstStructure* s  = gst_structure_new_empty("prerecord-flush");
-  GstEvent*     ev = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
+  GstStructure* s = gst_structure_new_empty("prerecord-flush");
+  GstEvent* ev = gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
 static gboolean send_rearm(GstElement* pr) {
-  GstStructure* s  = gst_structure_new_empty("prerecord-arm");
-  GstEvent*     ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
+  GstStructure* s = gst_structure_new_empty("prerecord-arm");
+  GstEvent* ev = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, s);
   return gst_element_send_event(pr, ev);
 }
 
 /* Wait for emission count to stabilize (no change for stable_threshold consecutive checks) */
 static void wait_for_stable_emission(GstElement* pipeline, guint64* emitted, guint stable_threshold,
                                      guint max_attempts) {
-  guint64 last   = *emitted;
-  guint   stable = 0;
+  guint64 last = *emitted;
+  guint stable = 0;
   for (guint i = 0; i < max_attempts && stable < stable_threshold; ++i) {
     gst_bus_timed_pop_filtered(gst_element_get_bus(pipeline), 5 * GST_MSECOND, GST_MESSAGE_ANY);
     while (g_main_context_iteration(NULL, FALSE))
@@ -37,7 +37,7 @@ static void wait_for_stable_emission(GstElement* pipeline, guint64* emitted, gui
     if (*emitted == last) {
       stable++;
     } else {
-      last   = *emitted;
+      last = *emitted;
       stable = 0;
     }
   }
@@ -51,12 +51,12 @@ int main(int argc, char** argv) {
   if (!prerec_pipeline_create(&tp, "t012-emission"))
     FAIL("pipeline creation failed");
 
-  guint64 emitted  = 0;
-  gulong  probe_id = prerec_attach_count_probe(tp.pr, &emitted);
+  guint64 emitted = 0;
+  gulong probe_id = prerec_attach_count_probe(tp.pr, &emitted);
   if (!probe_id)
     FAIL("failed to attach emission probe");
 
-  guint64       ts    = 0;
+  guint64 ts = 0;
   const guint64 delta = GST_SECOND;
 
   /* === PHASE 1: Initial buffering (3 GOPs, expect 0 emissions) === */
