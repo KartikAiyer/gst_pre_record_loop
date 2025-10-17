@@ -39,23 +39,6 @@ jobs:
           python3 -m venv venv
           echo "VIRTUAL_ENV=./venv" >> $GITHUB_ENV
           echo "./venv/bin" >> $GITHUB_PATH
-
-      - name: Install Conan
-        run: |
-          pip install conan
-          conan --version
-      
-      - name: Configure Conan profile
-        run: |
-          conan profile detect --force
-      
-      - name: Install Conan dependencies (Debug)
-        run: |
-          conan install . --build=missing --settings=build_type=Debug
-      
-      - name: Install Conan dependencies (Release)
-        run: |
-          conan install . --build=missing --settings=build_type=Release
       
       - name: Run CI test script
         env:
@@ -110,22 +93,7 @@ jobs:
 
       - name: Install Homebrew dependencies
         run: |
-          brew install gstreamer conan cmake clang-format
-
-      - name: Conan version
-        run: conan --version
-      
-      - name: Configure Conan profile
-        run: |
-          conan profile detect --force
-      
-      - name: Install Conan dependencies (Debug)
-        run: |
-          conan install . --build=missing --settings=build_type=Debug
-      
-      - name: Install Conan dependencies (Release)
-        run: |
-          conan install . --build=missing --settings=build_type=Release
+          brew install gstreamer cmake clang-format
       
       - name: Run CI test script
         env:

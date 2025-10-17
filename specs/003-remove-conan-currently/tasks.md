@@ -71,7 +71,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.2: CI Workflow Migration
 **Goal**: Remove Conan installation steps from CI, use native CMake presets
 
-- [ ] **T003** Update .github/workflows/ci.yml to remove Conan and use native presets
+- [x] **T003** Update .github/workflows/ci.yml to remove Conan and use native presets
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/.github/workflows/ci.yml`
   - **Actions**:
     1. **Remove** these steps from both `build-and-test-linux` and `build-and-test-macos` jobs:
@@ -91,7 +91,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.3: Build Script Refactoring
 **Goal**: Simplify build script to use native CMake presets directly
 
-- [ ] **T004** Refactor .ci/run-tests.sh to remove conan_preset() function
+- [x] **T004** Refactor .ci/run-tests.sh to remove conan_preset() function
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/.ci/run-tests.sh`
   - **Actions**:
     1. **Remove** entire `conan_preset()` function definition

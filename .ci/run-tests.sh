@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CPU_CORES="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
-echo "[CI] Starting full Debug + Release build/test using Conan + CMake presets"
+echo "[CI] Starting full Debug + Release build/test using CMake presets"
 
 require() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -15,7 +15,6 @@ require() {
 }
 
 require cmake
-require conan
 
 # T040: Code style check function - can be called independently
 check_code_style() {
@@ -80,36 +79,18 @@ check_code_style() {
   fi
 }
 
-# Run conan install only if the corresponding build/generators directory is missing
-conan_preset() {
-  local build_type="$1" # Debug or Release
-  # local preset_name="conan-${build_type,,}" # lower-case
-  local preset_name="conan-$(echo "$build_type" | tr '[:upper:]' '[:lower:]')"
-  local gen_dir="$ROOT_DIR/build/$build_type/generators"
-  if [[ ! -d "$gen_dir" ]]; then
-    echo "[CI] Running Conan install for $build_type (generators missing)"
-    if [[ "$build_type" == "Debug" ]]; then
-      conan install . --build=missing --settings=build_type=Debug
-    else
-      conan install . --build=missing
-    fi
-  else
-    echo "[CI] Skipping Conan for $build_type (generators present)"
-  fi
-}
-
 # Configure, build, test using preset
 configure_build_test() {
-  local preset="$1" # e.g. conan-debug
-  local build_dir_suffix="${preset#conan-}" # debug or release
+  local preset="$1" # e.g. debug or release
+  local build_dir_suffix="${preset}" # debug or release
   local upper_dir="$(printf '%s%s' "${build_dir_suffix:0:1}" | tr '[:lower:]' '[:upper:]')${build_dir_suffix:1}"
   echo "[CI] Configuring ($preset)"
   cmake --preset="$preset"
   echo "[CI] Building ($preset)"
-  cmake --build --preset="$preset" -- -j"$CPU_CORES"
+  cmake --build --preset="$preset" --parallel "$CPU_CORES"
   
   # Run style check after build (only once for Debug build)
-  if [[ "$preset" == "conan-debug" ]]; then
+  if [[ "$preset" == "debug" ]]; then
     check_code_style || return 1
   fi
   
@@ -149,11 +130,9 @@ configure_build_test() {
 }
 
 # Debug cycle
-conan_preset Debug
-configure_build_test conan-debug
+configure_build_test debug
 
 # Release cycle
-conan_preset Release
-configure_build_test conan-release || echo "[CI][WARN] Release preset not found yet (no preset file)"
+configure_build_test release
 
 echo "[CI] Completed CI script successfully"
