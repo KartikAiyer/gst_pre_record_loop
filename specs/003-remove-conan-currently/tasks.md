@@ -241,7 +241,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.8: CI Performance Optimization
 **Goal**: Cache all installed dependencies (apt packages + Homebrew packages) to reduce CI workflow execution time
 
-- [ ] **T012** Add GitHub Actions cache for apt and Homebrew dependencies
+- [x] **T012** Add GitHub Actions cache for apt and Homebrew dependencies
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/.github/workflows/ci.yml`
   - **Actions**:
     

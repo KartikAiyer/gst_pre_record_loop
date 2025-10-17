@@ -19,6 +19,17 @@ jobs:
       - name: Install Homebrew (if not already present)
         uses: Homebrew/actions/setup-homebrew@master
 
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        id: cache-apt
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -27,18 +38,24 @@ jobs:
             valgrind \
             build-essential \
             pkg-config \
-            python3-venv \
             clang-format
 
+      - name: Cache Homebrew packages (Linux)
+        uses: actions/cache@v4
+        id: cache-homebrew-linux
+        with:
+          path: |
+            /home/linuxbrew/.linuxbrew/Cellar
+            /home/linuxbrew/.linuxbrew/lib/pkgconfig
+            /home/linuxbrew/.linuxbrew/include
+          key: ${{ runner.os }}-linuxbrew-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-linuxbrew-
+
       - name: Install GStreamer
+        if: steps.cache-homebrew-linux.outputs.cache-hit != 'true'
         run: |
           brew install gstreamer
-
-      - name: Setup Python Virtual Environment
-        run: |
-          python3 -m venv venv
-          echo "VIRTUAL_ENV=./venv" >> $GITHUB_ENV
-          echo "./venv/bin" >> $GITHUB_PATH
       
       - name: Run CI test script
         env:
@@ -91,7 +108,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Cache Homebrew packages (macOS)
+        uses: actions/cache@v4
+        id: cache-homebrew-macos
+        with:
+          path: |
+            /opt/homebrew/Cellar
+            /opt/homebrew/lib/pkgconfig
+            /opt/homebrew/include
+          key: ${{ runner.os }}-homebrew-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-homebrew-
+
       - name: Install Homebrew dependencies
+        if: steps.cache-homebrew-macos.outputs.cache-hit != 'true'
         run: |
           brew install gstreamer cmake clang-format
       
