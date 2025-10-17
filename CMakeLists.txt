@@ -78,7 +78,6 @@ if(gstreamer_VERSION VERSION_LESS "1.26")
   message(FATAL_ERROR "GStreamer 1.26 or newer required (found ${gstreamer_VERSION}). GstVecDeque API required.")
 endif()
 message(STATUS "Found GStreamer ${gstreamer_VERSION}")
-find_package(spdlog REQUIRED)
 
 add_subdirectory(gstprerecordloop)
 add_subdirectory(testapp)

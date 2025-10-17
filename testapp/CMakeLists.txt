@@ -3,7 +3,7 @@ file(GLOB sources src/*.cc src/*.c)
 add_executable(prerec "${sources}")
 
 # Link with GStreamer
-target_link_libraries(prerec PRIVATE PkgConfig::gstreamer spdlog::spdlog)
+target_link_libraries(prerec PRIVATE PkgConfig::gstreamer)
 target_compile_features(prerec PRIVATE cxx_std_20)
 target_include_directories(prerec PRIVATE inc)
 
