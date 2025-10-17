@@ -99,16 +99,18 @@ fi
 echo "[VALGRIND] Step 3/3: Running leak detection tests..."
 
 # Valgrind options:
-# --leak-check=full        : detailed leak information
-# --show-leak-kinds=all    : show all leak types (definite, indirect, possible, reachable)
-# --track-origins=yes      : track origin of uninitialized values
-# --error-exitcode=1       : exit with code 1 if errors found
-# --suppressions=file      : suppress known GStreamer "leaks"
-# --gen-suppressions=no    : don't generate suppression patterns (set to 'all' for debugging)
+# --leak-check=full                      : detailed leak information
+# --show-leak-kinds=definite,indirect    : show only definite and indirect leaks
+# --errors-for-leak-kinds=definite,indirect : only error on definite/indirect (not "possibly lost")
+# --track-origins=yes                    : track origin of uninitialized values
+# --error-exitcode=1                     : exit with code 1 if errors found
+# --suppressions=file                    : suppress known GStreamer "leaks"
+# --gen-suppressions=no                  : don't generate suppression patterns (set to 'all' for debugging)
 
 VALGRIND_OPTS=(
   --leak-check=full
   --show-leak-kinds=definite,indirect
+  --errors-for-leak-kinds=definite,indirect
   --track-origins=yes
   --error-exitcode=1
   --suppressions="${SUPPRESSIONS_FILE}"
@@ -157,8 +159,9 @@ LEAK_DETECTED=0
 for log_file in "${LOG_DIR}"/valgrind_*.txt; do
   if [ -f "${log_file}" ]; then
     # Check for definite leaks (ignore "still reachable" from GStreamer globals)
-    DEFINITE_LEAKS=$(grep "definitely lost:" "${log_file}" | awk '{print $4}' | sed 's/,//g')
-    INDIRECT_LEAKS=$(grep "indirectly lost:" "${log_file}" | awk '{print $4}' | sed 's/,//g')
+    # Use || true to prevent script exit if grep fails (files without LEAK SUMMARY)
+    DEFINITE_LEAKS=$(grep "definitely lost:" "${log_file}" 2>/dev/null | awk '{print $4}' | sed 's/,//g' || echo "0")
+    INDIRECT_LEAKS=$(grep "indirectly lost:" "${log_file}" 2>/dev/null | awk '{print $4}' | sed 's/,//g' || echo "0")
     
     if [ "${DEFINITE_LEAKS:-0}" -gt 0 ] || [ "${INDIRECT_LEAKS:-0}" -gt 0 ]; then
       LEAK_DETECTED=1

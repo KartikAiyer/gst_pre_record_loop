@@ -10,10 +10,37 @@ option(ENABLE_ASAN "Enable AddressSanitizer for leak/memory error detection (mac
 # If it's not set, it will be an empty string
 set(CURRENT_PKG_CONFIG_PATH "$ENV{PKG_CONFIG_PATH}")
 
-# Define the path to your GStreamer pkgconfig directory
-set(GSTREAMER_PKGCONFIG_DIR "/opt/homebrew/Cellar/gstreamer/1.26.2/lib/pkgconfig") # Make sure to use the correct version
-# Define the path to your glib pkgconfig directory
-set(GLIB_PKGCONFIG_DIR "/opt/homebrew/Cellar/glib/2.84.3/lib/pkgconfig") # Make sure to use the correct glib version
+# Auto-detect GStreamer installation paths (macOS Homebrew vs Linux Linuxbrew)
+if(APPLE)
+  # macOS Homebrew paths
+  set(GSTREAMER_PKGCONFIG_DIR "/opt/homebrew/Cellar/gstreamer/1.26.2/lib/pkgconfig")
+  set(GLIB_PKGCONFIG_DIR "/opt/homebrew/Cellar/glib/2.84.3/lib/pkgconfig")
+elseif(UNIX)
+  # Linux Linuxbrew paths - try to find actual version
+  execute_process(
+    COMMAND pkg-config --variable=prefix gstreamer-1.0
+    OUTPUT_VARIABLE GSTREAMER_PREFIX
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(GSTREAMER_PREFIX)
+    set(GSTREAMER_PKGCONFIG_DIR "${GSTREAMER_PREFIX}/lib/pkgconfig")
+    # Try to get glib prefix from GStreamer's dependency
+    execute_process(
+      COMMAND pkg-config --variable=prefix glib-2.0
+      OUTPUT_VARIABLE GLIB_PREFIX
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(GLIB_PREFIX)
+      set(GLIB_PKGCONFIG_DIR "${GLIB_PREFIX}/lib/pkgconfig")
+    endif()
+  else()
+    # Fallback to common Linuxbrew path
+    set(GSTREAMER_PKGCONFIG_DIR "/home/linuxbrew/.linuxbrew/lib/pkgconfig")
+    set(GLIB_PKGCONFIG_DIR "/home/linuxbrew/.linuxbrew/lib/pkgconfig")
+  endif()
+endif()
 
 set(CUMULATIVE_PATH "${GSTREAMER_PKGCONFIG_DIR}:${GLIB_PKGCONFIG_DIR}")
 

@@ -1,0 +1,31 @@
+# GStreamer Valgrind suppressions
+# GStreamer plugins may have intentional "leaks" for cached global state
+# See: https://gitlab.freedesktop.org/gstreamer/gstreamer/-/blob/main/gstreamer.supp
+
+{
+   gstreamer-registry-cache
+   Memcheck:Leak
+   ...
+   fun:gst_registry_*
+}
+
+{
+   gstreamer-plugin-loader
+   Memcheck:Leak
+   ...
+   fun:gst_plugin_*
+}
+
+{
+   glib-type-system
+   Memcheck:Leak
+   ...
+   fun:g_type_*
+}
+
+{
+   glib-quark-table
+   Memcheck:Leak
+   ...
+   fun:g_quark_*
+}
