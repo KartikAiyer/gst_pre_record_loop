@@ -38,7 +38,8 @@ jobs:
             valgrind \
             build-essential \
             pkg-config \
-            clang-format
+            clang-format \
+            libdw-dev
 
       - name: Cache Homebrew packages (Linux)
         uses: actions/cache@v4
