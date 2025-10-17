@@ -30,10 +30,12 @@ PASS_THROUGH --[prerecord-arm]-> reset baseline -> BUFFERING
 
 ### Quick Start (Debug Build)
 ```bash
-# First-time setup with Conan
-conan install . --build=missing --settings=build_type=Debug
-cmake --preset=conan-debug
-cmake --build --preset=conan-debug
+# First-time setup (requires GStreamer 1.26+ via Homebrew)
+brew install gstreamer  # If not already installed
+
+# Configure and build
+cmake --preset=debug
+cmake --build --preset=debug --parallel 6
 
 # Subsequent rebuilds (after code changes)
 cmake --build build/Debug --parallel 6
@@ -159,10 +161,12 @@ See `gstprerecordloop.c` src query handler for returned fields.
 
 ## Environment Dependencies
 
-- **GStreamer**: 1.26.2 (Homebrew install required, pkgconfig paths hardcoded in `CMakeLists.txt`)
-- **Conan**: Package manager for spdlog/uvw/catch2 dependencies
-- **CMake**: 3.27+ with preset support
-- **macOS-specific**: Paths assume `/opt/homebrew/Cellar/` structure
+- **GStreamer**: 1.26+ (Homebrew install required: `brew install gstreamer`, pkgconfig paths in `CMakeLists.txt`)
+- **CMake**: 3.27+ with preset support (native presets, NO Conan dependency)
+- **macOS-specific**: Paths assume `/opt/homebrew/Cellar/` structure (Apple Silicon) or `/usr/local` (Intel)
+- **Linux-specific**: Assumes Homebrew/Linuxbrew installation for GStreamer
+
+**Recent Change (Feature 003)**: Conan package manager removed. Build uses repository-managed CMakePresets.json (debug/release) with native CMake workflow. No external dependencies beyond GStreamer (pkg-config).
 
 ## Key Files Quick Reference
 | File | Purpose |
