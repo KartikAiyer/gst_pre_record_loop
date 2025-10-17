@@ -45,10 +45,18 @@ jobs:
         id: cache-homebrew-linux
         with:
           path: |
-            /home/linuxbrew/.linuxbrew/Cellar
-            /home/linuxbrew/.linuxbrew/opt
-            /home/linuxbrew/.linuxbrew/lib
-            /home/linuxbrew/.linuxbrew/include
+            /home/linuxbrew/.linuxbrew/Cellar/gstreamer
+            /home/linuxbrew/.linuxbrew/Cellar/gst-plugins-base
+            /home/linuxbrew/.linuxbrew/Cellar/gst-plugins-good
+            /home/linuxbrew/.linuxbrew/Cellar/gst-plugins-bad
+            /home/linuxbrew/.linuxbrew/Cellar/gst-plugins-ugly
+            /home/linuxbrew/.linuxbrew/Cellar/glib
+            /home/linuxbrew/.linuxbrew/opt/gstreamer
+            /home/linuxbrew/.linuxbrew/opt/gst-plugins-base
+            /home/linuxbrew/.linuxbrew/opt/gst-plugins-good
+            /home/linuxbrew/.linuxbrew/opt/gst-plugins-bad
+            /home/linuxbrew/.linuxbrew/opt/gst-plugins-ugly
+            /home/linuxbrew/.linuxbrew/opt/glib
           key: ${{ runner.os }}-linuxbrew-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: |
             ${{ runner.os }}-linuxbrew-
@@ -113,10 +121,18 @@ jobs:
         id: cache-homebrew-macos
         with:
           path: |
-            /opt/homebrew/Cellar
-            /opt/homebrew/opt
-            /opt/homebrew/lib
-            /opt/homebrew/include
+            /opt/homebrew/Cellar/gstreamer
+            /opt/homebrew/Cellar/gst-plugins-base
+            /opt/homebrew/Cellar/gst-plugins-good
+            /opt/homebrew/Cellar/gst-plugins-bad
+            /opt/homebrew/Cellar/gst-plugins-ugly
+            /opt/homebrew/Cellar/glib
+            /opt/homebrew/opt/gstreamer
+            /opt/homebrew/opt/gst-plugins-base
+            /opt/homebrew/opt/gst-plugins-good
+            /opt/homebrew/opt/gst-plugins-bad
+            /opt/homebrew/opt/gst-plugins-ugly
+            /opt/homebrew/opt/glib
           key: ${{ runner.os }}-homebrew-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: |
             ${{ runner.os }}-homebrew-
