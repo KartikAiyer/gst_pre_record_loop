@@ -79,11 +79,19 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
        - "Configure Conan profile" (conan profile detect)
        - "Install Conan dependencies (Debug)" (conan install Debug)
        - "Install Conan dependencies (Release)" (conan install Release)
-    2. **Update** "Run CI test script" step to keep script invocation (script itself will be updated in T004)
-    3. **Verify** GStreamer installation step remains: `brew install gstreamer`
-    4. **Keep** all test execution and artifact upload steps unchanged
+    2. **Linux job only**: Remove Python virtual environment setup:
+       - Remove `python3-venv` from apt-get install list
+       - Remove "Setup Python Virtual Environment" step entirely
+    3. **Update** "Run CI test script" step to keep script invocation (script itself will be updated in T004)
+    4. **Verify** GStreamer installation step remains: `brew install gstreamer`
+    5. **Keep** all test execution and artifact upload steps unchanged
   - **Preset References**: Script will use `debug` and `release` (not `conan-debug`, `conan-release`)
-  - **Validation**: No references to "conan" in workflow file, GStreamer install preserved
+  - **Success Criteria**:
+    - ✅ FR-012: ubuntu-22.04 workflow has no Conan steps
+    - ✅ FR-013: macos-latest workflow has no Conan steps
+    - ✅ FR-033: No Python virtual environment setup
+    - ✅ FR-034: python3-venv not in apt-get install list
+  - **Validation**: No references to "conan" or "venv" in workflow file, GStreamer install preserved
   - **Dependencies**: T001 (needs CMakePresets.json to exist)
 
 ---
@@ -214,7 +222,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.7: CI Validation (Linux)
 **Goal**: Verify changes work in GitHub Actions CI environment
 
-- [ ] **T011** Push branch and verify CI workflows succeed on ubuntu-22.04 and macos-latest
+- [x] **T011** Push branch and verify CI workflows succeed on ubuntu-22.04 and macos-latest
   - **Actions**:
     1. Commit all changes (T001-T008) to branch `003-remove-conan-currently`
     2. Push to GitHub
@@ -226,13 +234,84 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
     - ✅ FR-016: Code style checks pass
   - **Validation**: All CI checks green, no Conan-related errors
   - **Dependencies**: T001-T010 (all changes committed and tested locally)
+  - **Result**: ✅ PASS - All jobs succeeded on both platforms (2025-10-17)
 
 ---
 
-## Phase 3.8: Final Documentation Review
+## Phase 3.8: CI Performance Optimization
+**Goal**: Cache all installed dependencies (apt packages + Homebrew packages) to reduce CI workflow execution time
+
+- [ ] **T012** Add GitHub Actions cache for apt and Homebrew dependencies
+  - **File**: `/Users/kartikaiyer/fun/gst_my_filter/.github/workflows/ci.yml`
+  - **Actions**:
+    
+    **For Linux job (ubuntu-22.04)**:
+    1. Add apt package cache before "Install system dependencies" step:
+       - Cache paths: `/var/cache/apt/archives`, `/var/lib/apt/lists`
+       - Cache key: `${{ runner.os }}-apt-${{ hashFiles('.github/workflows/ci.yml') }}`
+       - Note: Caches cmake, valgrind, build-essential, pkg-config, clang-format (python3-venv removed in T003)
+       - Conditional apt-get: Run only if cache miss or use `apt-cache policy` to verify
+    
+    2. Add Homebrew cache before "Install GStreamer" step:
+       - Cache paths:
+         * `/home/linuxbrew/.linuxbrew/Cellar`
+         * `/home/linuxbrew/.linuxbrew/lib/pkgconfig`
+         * `/home/linuxbrew/.linuxbrew/include`
+       - Cache key: `${{ runner.os }}-linuxbrew-${{ hashFiles('.github/workflows/ci.yml') }}`
+       - Conditional install: `if: steps.cache-homebrew.outputs.cache-hit != 'true'`
+    
+    **For macOS job (macos-latest)**:
+    3. Add Homebrew cache before "Install Homebrew dependencies" step:
+       - Cache paths:
+         * `/opt/homebrew/Cellar`
+         * `/opt/homebrew/lib/pkgconfig`
+         * `/opt/homebrew/include`
+       - Cache key: `${{ runner.os }}-homebrew-${{ hashFiles('.github/workflows/ci.yml') }}`
+       - Conditional install: `if: steps.cache-homebrew.outputs.cache-hit != 'true'`
+    
+    4. Use `actions/cache@v4` for all cache steps
+    5. Add restore-keys for graceful fallback (OS-based prefix)
+    
+  - **Success Criteria**:
+    - ✅ FR-029: Cache steps added for all installed dependencies
+    - ✅ FR-030: Separate cache keys for apt and Homebrew
+    - ✅ FR-031: Cache hit skips package installations
+    - ✅ FR-032: Cache miss falls back to fresh installs
+  - **Validation**: 
+    - First workflow run: cache miss, full install (~10 minutes Linux, ~8 minutes macOS)
+    - Second workflow run: cache hit, restore only (~1 minute total for both caches)
+    - Both runs complete with all tests passing
+  - **Dependencies**: T011 (CI validation working)
+
+---
+
+## Phase 3.9: CI Cache Validation
+**Goal**: Verify cache performance improvement in real GitHub Actions environment
+
+- [ ] **T013** Validate CI cache performance and measure time savings
+  - **Actions**:
+    1. Push branch with cache changes to GitHub
+    2. Monitor first workflow run (cache miss - baseline)
+    3. Trigger second workflow run (cache hit - optimized)
+    4. Compare workflow execution times in GitHub Actions logs
+    5. Document cache hit/miss times for both apt and Homebrew caches in quickstart.md
+    6. Verify cache size is reasonable (<2GB total per platform)
+  - **Success Criteria**:
+    - ✅ First run: Both caches miss, all packages installed, caches saved
+    - ✅ Second run: Both caches hit, packages restored from cache
+    - ✅ Time savings Linux: 7-10 minutes (apt: ~3min, Homebrew: ~5-7min)
+    - ✅ Time savings macOS: 5-8 minutes (Homebrew: ~5-8min)
+    - ✅ All 22 tests pass on both runs
+    - ✅ Cache logs show successful restore and save operations
+  - **Validation**: GitHub Actions logs show cache restore success, reduced execution time, and reasonable cache sizes
+  - **Dependencies**: T012 (cache implementation)
+
+---
+
+## Phase 3.10: Final Documentation Review
 **Goal**: Ensure all documentation is consistent and complete
 
-- [ ] **T012** [P] Final review and update spec.md status
+- [ ] **T014** [P] Final review and update spec.md status
   - **Files**:
     - `/Users/kartikaiyer/fun/gst_my_filter/specs/003-remove-conan-currently/spec.md`
     - `/Users/kartikaiyer/fun/gst_my_filter/specs/003-remove-conan-currently/quickstart.md`
@@ -246,7 +325,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
     3. Verify all functional requirements documented as satisfied
     4. Document CI execution time in PR description (FR: document but don't measure)
   - **Validation**: Spec marked complete, quickstart sign-off filled
-  - **Dependencies**: T009, T011 (validation complete)
+  - **Dependencies**: T009, T011, T013 (validation complete with cache optimization)
 
 ---
 
@@ -263,7 +342,7 @@ T003, T004, T005 ──→ T006 (delete conanfile.py) ──→ T008 (cleanup do
 
 T001-T008 ──→ T009 (local validation) ──→ T010 (CI simulation)
 
-T009, T010 ──→ T011 (CI validation) ──→ T012 (final review)
+T009, T010 ──→ T011 (CI validation) ──→ T012 (CI caching) ──→ T013 (cache validation) ──→ T014 (final review)
 ```
 
 ## Parallel Execution Opportunities
@@ -306,15 +385,17 @@ Task T009: "Document cleanup"
 
 ## Task Summary
 
-**Total Tasks**: 12  
+**Total Tasks**: 14  
 **Parallel Tasks**: 5 (T001, T002, T005, T006, T007, T008)  
-**Sequential Tasks**: 7 (T003-T004, T009-T012)  
+**Sequential Tasks**: 9 (T003-T004, T009-T014)  
 
 **Estimated Effort**:
 - Setup & Migration (T001-T005): 2-3 hours
 - Cleanup (T006-T008): 30 minutes
-- Validation (T009-T012): 2-3 hours (includes CI wait time)
-- **Total**: 5-7 hours
+- Validation (T009-T011): 2-3 hours (includes CI wait time)
+- CI Optimization (T012-T013): 1-2 hours (cache implementation + validation)
+- Final Review (T014): 30 minutes
+- **Total**: 6-9 hours
 
 **Risk Level**: Low (configuration only, easily reversible via git revert)
 

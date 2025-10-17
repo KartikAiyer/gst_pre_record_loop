@@ -69,20 +69,26 @@ As a **developer working on the prerecordloop GStreamer plugin**, I want to **bu
 #### Scenario 3: CI Build and Test (Ubuntu)
 1. **Given** the GitHub Actions CI environment on ubuntu-22.04
 2. **When** the CI workflow runs build and test steps
-3. **Then** GStreamer is installed via Homebrew/Linuxbrew
-4. **And** CMake configures the project without Conan installation steps
-5. **And** Debug and Release builds complete successfully
-6. **And** all tests pass in both configurations
-7. **And** code style checks complete successfully
+3. **Then** apt-get packages (cmake, valgrind, build-essential, pkg-config, clang-format) are restored from GitHub Actions cache if available
+4. **And** Homebrew packages (GStreamer) are restored from GitHub Actions cache if available
+5. **Or** packages are installed fresh via apt-get and Homebrew if cache miss
+6. **And** no Python virtual environment is created (not needed without Conan)
+7. **And** CMake configures the project without Conan installation steps
+8. **And** Debug and Release builds complete successfully
+9. **And** all tests pass in both configurations
+10. **And** code style checks complete successfully
+11. **And** all installed packages (apt + Homebrew) are cached for subsequent workflow runs
 
 #### Scenario 4: CI Build and Test (macOS)
 1. **Given** the GitHub Actions CI environment on macos-latest
 2. **When** the CI workflow runs build and test steps
-3. **Then** GStreamer is installed via Homebrew
-4. **And** CMake configures the project without Conan installation steps
-5. **And** Debug and Release builds complete successfully
-6. **And** all tests pass in both configurations
-7. **And** code style checks complete successfully
+3. **Then** Homebrew packages (gstreamer, cmake, clang-format) are restored from GitHub Actions cache if available
+4. **Or** packages are installed via Homebrew if cache miss
+5. **And** CMake configures the project without Conan installation steps
+6. **And** Debug and Release builds complete successfully
+7. **And** all tests pass in both configurations
+8. **And** code style checks complete successfully
+9. **And** Homebrew packages are cached for subsequent workflow runs
 
 #### Scenario 5: CI Memory Testing (Valgrind on Linux)
 1. **Given** the Valgrind CI workflow on ubuntu-22.04
@@ -96,6 +102,14 @@ As a **developer working on the prerecordloop GStreamer plugin**, I want to **bu
 3. **Then** no Conan-related errors or warnings appear
 4. **And** the build completes successfully with default CMake configuration
 5. **And** tests can be run immediately after build
+
+#### Scenario 7: CI Cache Performance
+1. **Given** GitHub Actions workflow has run at least once (caches populated)
+2. **When** a subsequent workflow run is triggered
+3. **Then** the cache restore steps succeed for both apt packages (Linux) and Homebrew packages
+4. **And** package installations are skipped (already cached)
+5. **And** total workflow time is significantly reduced compared to cache miss (5-10 minutes saved)
+6. **And** builds and tests complete successfully using cached dependencies
 
 ### Edge Cases
 - What happens when GStreamer is not found via pkg-config?
@@ -137,6 +151,12 @@ As a **developer working on the prerecordloop GStreamer plugin**, I want to **bu
 - **FR-015**: CI build scripts MUST complete both Debug and Release builds successfully
 - **FR-016**: CI MUST enforce code style checks before running tests
 - **FR-017**: CI MUST validate plugin registration with gst-inspect-1.0
+- **FR-029**: CI workflows MUST cache all installed dependencies (apt-get packages on Linux, Homebrew packages on macOS/Linux) to avoid reinstalling on every workflow run
+- **FR-030**: CI workflows MUST use GitHub Actions cache with separate cache keys for apt packages and Homebrew packages based on runner OS and dependency lockfiles
+- **FR-031**: CI cache restoration MUST significantly reduce workflow execution time by skipping package reinstallation when cache is valid (90%+ of dependency installation time)
+- **FR-032**: CI workflows MUST handle cache misses gracefully by falling back to fresh package installation via apt-get or Homebrew
+- **FR-033**: CI workflows MUST NOT include Python virtual environment setup steps (only needed for Conan, which is removed)
+- **FR-034**: Linux CI workflow MUST NOT install python3-venv package (only needed for Conan)
 
 #### Documentation Requirements
 - **FR-018**: README MUST document quick-start build commands without Conan references
@@ -231,8 +251,8 @@ As a **developer working on the prerecordloop GStreamer plugin**, I want to **bu
 
 ### CI Execution Time
 - **Metric**: Time to complete CI build+test workflow
-- **Target**: CI must complete successfully; time improvement expected but not measured
-- **Measurement**: Document workflow duration in PR description for reference (no baseline comparison required)
+- **Target**: CI must complete successfully; cache hit should significantly reduce time spent on dependency installation (5+ minutes saved per workflow run)
+- **Measurement**: Compare workflow duration with cache hit vs cache miss in GitHub Actions logs
 
 ### Developer Experience
 - **Metric**: Number of build steps required

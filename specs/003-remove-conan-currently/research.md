@@ -314,6 +314,188 @@ ctest --test-dir build/Debug
 
 ---
 
+### 11. GitHub Actions CI Cache Strategy
+
+**Investigation**: How to optimize CI workflow time by caching all installed dependencies (apt packages and Homebrew packages)?
+
+**Findings**:
+- Current CI workflow installs packages via apt-get (Linux) and Homebrew (both platforms) on every run
+- Total package installation time: 5-10 minutes per workflow run
+- GitHub Actions provides `actions/cache@v4` for caching directories
+- Linux needs both apt cache AND Homebrew cache
+- macOS needs only Homebrew cache
+
+**Current Package Installations**:
+
+**Linux (ubuntu-22.04)**:
+1. **apt-get packages**:
+   - cmake, valgrind, build-essential, pkg-config, python3-venv, clang-format
+   - Installed to: `/usr/bin`, `/usr/lib`, `/usr/share`
+   - Cache location: `/var/cache/apt`, `/var/lib/apt/lists`
+2. **Homebrew packages**:
+   - gstreamer (via Homebrew/Linuxbrew)
+   - Installed to: `/home/linuxbrew/.linuxbrew/`
+
+**macOS (macos-latest)**:
+1. **Homebrew packages**:
+   - gstreamer, cmake, clang-format
+   - Installed to: `/opt/homebrew` (Apple Silicon) or `/usr/local` (Intel)
+
+**Comprehensive Cache Strategy**:
+
+**For Linux (ubuntu-22.04)**:
+```yaml
+# Cache 1: apt packages
+- name: Cache apt packages
+  uses: actions/cache@v4
+  with:
+    path: |
+      /var/cache/apt/archives
+      /var/lib/apt/lists
+    key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/ci.yml') }}
+    restore-keys: |
+      ${{ runner.os }}-apt-
+
+# Cache 2: Homebrew (GStreamer)
+- name: Cache Homebrew
+  uses: actions/cache@v4
+  with:
+    path: |
+      /home/linuxbrew/.linuxbrew/Cellar
+      /home/linuxbrew/.linuxbrew/lib/pkgconfig
+      /home/linuxbrew/.linuxbrew/include
+    key: ${{ runner.os }}-linuxbrew-${{ hashFiles('.github/workflows/ci.yml') }}
+    restore-keys: |
+      ${{ runner.os }}-linuxbrew-
+```
+
+**For macOS (macos-latest)**:
+```yaml
+# Cache: Homebrew packages
+- name: Cache Homebrew
+  uses: actions/cache@v4
+  with:
+    path: |
+      /opt/homebrew/Cellar
+      /opt/homebrew/lib/pkgconfig
+      /opt/homebrew/include
+    key: ${{ runner.os }}-homebrew-${{ hashFiles('.github/workflows/ci.yml') }}
+    restore-keys: |
+      ${{ runner.os }}-homebrew-
+```
+
+**Decision**: Implement multi-layer caching for complete dependency coverage.
+
+**Rationale**:
+- **apt cache** saves 2-3 minutes (Linux only)
+- **Homebrew cache** saves 5-8 minutes (both platforms)
+- **Combined savings**: 7-10 minutes per workflow run on Linux, 5-8 minutes on macOS
+- Cache hit rate expected >90% (dependencies change infrequently)
+- Graceful fallback on cache miss
+- No maintenance burden (GitHub manages cache eviction)
+
+**Cache Key Strategy**:
+- Keyed by `runner.os` (different paths for macOS/Linux)
+- Includes workflow file hash (invalidates on dependency version changes)
+- Separate keys for apt vs Homebrew (different update cadences)
+- Fallback to any cache for same OS + package manager
+
+**Expected Performance**:
+
+**Linux (ubuntu-22.04)**:
+- **Cache miss**: ~10 minutes (apt: ~3min, Homebrew: ~7min)
+- **Cache hit**: ~1 minute (restore both caches)
+- **Net savings**: 9 minutes per workflow run
+
+**macOS (macos-latest)**:
+- **Cache miss**: ~8 minutes (Homebrew install all packages)
+- **Cache hit**: ~30 seconds (restore Homebrew cache)
+- **Net savings**: 7.5 minutes per workflow run
+
+**Alternatives Considered**:
+- Cache only GStreamer → **Rejected**: Misses apt packages (2-3 min savings left on table)
+- Docker image with pre-installed deps → **Rejected**: macOS runners don't support Docker
+- Cache entire /home/linuxbrew → **Rejected**: Too large, includes unnecessary files
+- Single cache for all packages → **Rejected**: apt and Homebrew have different update patterns
+
+**Cache Invalidation Triggers**:
+- Workflow file changes (dependency version update)
+- Manual cache clear (via GitHub UI)
+- 7-day cache eviction (GitHub policy)
+
+---
+
+### 12. Python Virtual Environment Removal
+
+**Investigation**: Is the Python virtual environment still needed after Conan removal?
+
+**Findings** (from .github/workflows/ci.yml analysis):
+- Current Linux workflow includes:
+  ```yaml
+  - name: Install system dependencies
+    run: |
+      sudo apt-get install -y \
+        cmake \
+        valgrind \
+        build-essential \
+        pkg-config \
+        python3-venv \  # <-- Only needed for Conan
+        clang-format
+  
+  - name: Setup Python Virtual Environment
+    run: |
+      python3 -m venv venv
+      echo "VIRTUAL_ENV=./venv" >> $GITHUB_ENV
+      echo "./venv/bin" >> $GITHUB_PATH
+  ```
+- Python venv was created to isolate `pip install conan`
+- No other Python dependencies in the project
+- Plugin is pure C11, build system is CMake, tests use CTest
+- macOS workflow does NOT use Python venv (never needed it)
+
+**Current Python Usage in Project**:
+- **Build system**: CMake (no Python)
+- **Plugin code**: C11 (no Python)
+- **Tests**: CTest + C test harness (no Python)
+- **CI scripts**: Bash (.ci/run-tests.sh) (no Python)
+- **Only Python use was**: `pip install conan` in virtual environment
+
+**Decision**: Remove Python virtual environment setup and python3-venv package from Linux CI workflow.
+
+**Rationale**:
+- Zero Python dependencies after Conan removal
+- Reduces CI complexity (one less setup step)
+- Saves ~10-15 seconds per workflow run (venv creation)
+- Reduces apt package count (removes python3-venv)
+- Simplifies cache (no Python packages to cache)
+- Makes Linux workflow consistent with macOS (which never had Python)
+
+**Impact Analysis**:
+- **Removed from apt-get install**: `python3-venv`
+- **Removed step**: "Setup Python Virtual Environment"
+- **Affected files**: `.github/workflows/ci.yml` (Linux job only)
+- **No impact on**: macOS workflow (never had Python venv)
+- **No impact on**: Build process (CMake doesn't use Python)
+- **No impact on**: Tests (CTest doesn't use Python)
+
+**Alternatives Considered**:
+- Keep Python venv "just in case" → **Rejected**: YAGNI principle, adds unnecessary complexity
+- Keep python3-venv package but skip venv creation → **Rejected**: Package serves no purpose
+- Document Python as optional dependency → **Rejected**: Misleading, not actually used
+
+**Updated apt Package List** (Linux CI):
+```bash
+sudo apt-get install -y \
+  cmake \
+  valgrind \
+  build-essential \
+  pkg-config \
+  clang-format
+# python3-venv REMOVED - only needed for Conan
+```
+
+---
+
 ## Summary of Key Decisions
 
 | Area | Decision | Rationale |
@@ -322,6 +504,7 @@ ctest --test-dir build/Debug
 | **CMake Presets** | Repository CMakePresets.json (v6) with debug/release | Native CMake, version-controlled, supports configure + build |
 | **Compiler Flags** | Use CMake defaults per build type | Sufficient for current needs, user validated |
 | **CI Workflows** | Remove Conan steps, use native presets | Simpler, faster, more maintainable |
+| **CI Caching** | Multi-layer cache (apt + Homebrew on Linux, Homebrew on macOS) | Saves 7-10 min/run (Linux), 5-8 min/run (macOS); apt: ~3min, Homebrew: ~5-8min |
 | **Build Scripts** | Inline CMake commands, remove conan_preset() | Clearer, less abstraction |
 | **pkg-config** | No changes | Already working without Conan |
 | **Documentation** | Emphasize Homebrew GStreamer as prerequisite | Matches actual dependency reality |

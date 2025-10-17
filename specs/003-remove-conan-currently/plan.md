@@ -196,22 +196,26 @@ No source structure changes needed - only build configuration files.
 **Task Categories**:
 1. **CMakePresets Creation** [P]: Create repository CMakePresets.json with debug/release presets
 2. **CMakeUserPresets Removal** [P]: Delete CMakeUserPresets.json, add to .gitignore
-3. **CI Workflow Updates**: Remove Conan steps from ci.yml and valgrind.yml
+3. **CI Workflow Updates**: Remove Conan steps, Python venv, update preset names in ci.yml
 4. **Build Script Refactoring**: Update .ci/run-tests.sh to use native CMake presets
 5. **Documentation Updates** [P]: Update README with Conan-free workflow
 6. **Conan Artifact Removal**: Delete conanfile.py and document generator cleanup
-7. **Local Validation**: Execute quickstart.md on macOS
-8. **CI Validation**: Execute quickstart.md on Linux (via CI)
-9. **Final Verification**: Run full test suite (22 tests) in both configurations
+7. **CI Performance Optimization**: Add GitHub Actions cache for apt packages and Homebrew dependencies
+8. **Local Validation**: Execute quickstart.md on macOS
+9. **CI Validation**: Execute quickstart.md on Linux (via CI)
+10. **Cache Performance Validation**: Verify CI cache hit/miss performance
+11. **Final Verification**: Run full test suite (22 tests) in both configurations
 
 **Ordering Strategy**:
 - **Phase 1 (Preparation)**: Create CMakePresets.json first (enables local testing)
 - **Phase 2 (Migration)**: Update CI/scripts in parallel (marked [P])
 - **Phase 3 (Cleanup)**: Remove Conan artifacts after migration tested
 - **Phase 4 (Validation)**: Execute quickstart.md steps sequentially
+- **Phase 5 (Optimization)**: Add Homebrew cache to CI workflows
+- **Phase 6 (Cache Validation)**: Verify cache performance improvement
 - No TDD needed: No code changes, only configuration
 
-**Estimated Output**: 12-15 numbered, ordered tasks in tasks.md
+**Estimated Output**: 14-16 numbered, ordered tasks in tasks.md
 
 **Parallel Execution Opportunities**:
 - CMakePresets.json creation + CMakeUserPresets.json update (independent files)
