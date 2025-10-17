@@ -138,65 +138,110 @@ g_object_set(G_OBJECT(prerecordloop),
 - `flush-trigger-name` must match the structure name of the custom downstream event exactly (case-sensitive).
 - All properties are readable and writable at runtime via `g_object_get/set` or GStreamer property syntax.
 
+# Prerequisites
+
+Before building, ensure you have the following installed:
+
+## Required Dependencies
+
+1. **GStreamer 1.26+** (via Homebrew)
+   ```bash
+   brew install gstreamer
+   ```
+   The build system uses pkg-config to locate GStreamer libraries. Homebrew's GStreamer includes all necessary development headers and pkg-config files.
+
+2. **CMake 3.27+**
+   ```bash
+   brew install cmake
+   ```
+   Required for preset support (version 6 schema).
+
+3. **Build Tools**
+   - C11 compiler (Clang on macOS, GCC on Linux)
+   - pkg-config (included with Homebrew)
+
+## Optional Tools
+
+- **clang-format** (for code style checks in CI)
+  ```bash
+  brew install clang-format
+  ```
+
 # Building the Code
 
-The code base uses Conan as a package manager. It also expects that Gstreamer libraries are installed using homebrew. It uses pkgconfig to find it in 
-the CMakeLists.txt file.
+The project uses native CMake presets for configuration and building. No external package managers are required.
 
-```cmake
-# Define the path to your GStreamer pkgconfig directory
-set(GSTREAMER_PKGCONFIG_DIR "/opt/homebrew/Cellar/gstreamer/1.26.2/lib/pkgconfig") # Make sure to use the correct version
-# Define the path to your glib pkgconfig directory
-set(GLIB_PKGCONFIG_DIR "/opt/homebrew/Cellar/glib/2.84.3/lib/pkgconfig") # Make sure to use the correct glib version
+The CMake configuration automatically detects GStreamer via pkg-config. The Homebrew installation paths are discovered automatically.
+
+## Quick Start
+
+The project uses CMake presets (defined in `CMakePresets.json`) for streamlined configuration and building.
+
+### Debug Build
+
+1. **Configure**:
+   ```bash
+   cmake --preset=debug
+   ```
+
+2. **Build**:
+   ```bash
+   cmake --build --preset=debug
+   ```
+
+3. **Test**:
+   ```bash
+   ctest --test-dir build/Debug
+   ```
+
+### Release Build
+
+1. **Configure**:
+   ```bash
+   cmake --preset=release
+   ```
+
+2. **Build**:
+   ```bash
+   cmake --build --preset=release
+   ```
+
+3. **Test**:
+   ```bash
+   ctest --test-dir build/Release
+   ```
+
+### Available Presets
+
+View all available CMake presets:
+```bash
+cmake --list-presets
 ```
 
-## A Fresh build.
-
-This uses conan, and so when starting from a fresh build (i.e `./build` doesn't exist) we will need to invoke conan. 
-You can invoke either a release or debug build. Conan is setup to generate CMakePresets for configuration and build that can then subsequently be used to 
-configure and build the code.
-
-#### Debug
-
-```sh
-conan install . --build=missing --settings=build_type=Debug
+View build presets:
+```bash
+cmake --list-presets=build
 ```
 
-#### Release
- 
-```sh
-conan install . --build=missing
-```
-## Configure and build
+## Custom Build Configuration (Optional)
 
-This will configure and build all targets in the project.
+If you need to customize build settings (e.g., different generator, additional cache variables), create a `CMakeUserPresets.json` file in the repository root. This file is gitignored and allows local developer customization without affecting the repository.
 
-### Configure
-
-#### Debug
-
-```sh
-cmake --preset=conan-debug
-```
-
-#### Release
-
-```sh
-cmake --preset=conan-release
-```
-
-### Build
-
-#### Debug
-
-```sh
-cmake --build --preset=conan-debug
-```
-
-#### Release
-
-```sh
-cmake --build --preset=conan-release
+Example `CMakeUserPresets.json`:
+```json
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "my-debug",
+      "inherits": "debug",
+      "cacheVariables": {
+        "BUILD_GTK_DOC": "ON",
+        "CMAKE_VERBOSE_MAKEFILE": "ON"
+      }
+    }
+  ]
+}
 ```
 
 ## Build Options

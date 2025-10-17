@@ -115,7 +115,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.4: Documentation Updates
 **Goal**: Update README with Conan-free build workflow
 
-- [ ] **T005** [P] Update README.md to document Conan-free build process
+- [x] **T005** [P] Update README.md to document Conan-free build process
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/README.md`
   - **Actions**:
     1. **Update Prerequisites section**:
@@ -148,14 +148,14 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.5: Conan Artifact Removal
 **Goal**: Delete Conan configuration files and cleanup generated artifacts
 
-- [ ] **T006** [P] Delete conanfile.py from repository
+- [x] **T006** [P] Delete conanfile.py from repository
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/conanfile.py`
   - **Action**: Delete file (git rm)
   - **Rationale**: Conan provides zero dependencies, only generates presets (research.md §1)
   - **Validation**: File no longer exists in repository
   - **Dependencies**: T001, T003, T004, T005 (all Conan usages removed first)
 
-- [ ] **T007** [P] Delete CMakeUserPresets.json from repository
+- [x] **T007** [P] Delete CMakeUserPresets.json from repository
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/CMakeUserPresets.json`
   - **Action**: Delete file (git rm)
   - **Rationale**: User-specific file, should not be version-controlled (updated research.md §8)
@@ -163,7 +163,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
   - **Validation**: File deleted, present in .gitignore (from T002)
   - **Dependencies**: T002 (.gitignore updated first)
 
-- [ ] **T008** [P] Document build directory cleanup in commit message
+- [x] **T008** [P] Document build directory cleanup in commit message
   - **Action**: Create commit with detailed message documenting:
     - `build/Debug/generators/` directory is no longer generated (Conan artifact)
     - `build/Release/generators/` directory is no longer generated
