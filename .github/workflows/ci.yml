@@ -64,6 +64,7 @@ jobs:
       - name: Install GStreamer
         run: |
           brew install gstreamer
+          brew link --overwrite gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly glib || true
       
       - name: Run CI test script
         env:
@@ -140,6 +141,7 @@ jobs:
       - name: Install Homebrew dependencies
         run: |
           brew install gstreamer cmake clang-format
+          brew link --overwrite gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly glib || true
       
       - name: Run CI test script
         env:
