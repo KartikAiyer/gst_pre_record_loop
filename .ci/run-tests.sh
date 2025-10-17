@@ -3,9 +3,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CPU_CORES="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+CPU_CORES="$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)"
 
 echo "[CI] Starting full Debug + Release build/test using CMake presets"
+
+# Note: GStreamer plugin cache is managed by GStreamer itself
+# On fresh Linux runs (caching disabled), cache will be built from scratch
+# On cached macOS runs, we use GST_REGISTRY to force fresh cache with our plugin
 
 require() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -102,12 +106,58 @@ configure_build_test() {
   else
     echo "[CI][WARN] Plugin directory not found at $plugin_dir"
   fi
+
+  echo "[DEBUG]: PATH=${PATH}"
+  echo "[DEBUG]: which gst-inspect-1.0: $(which gst-inspect-1.0 2>/dev/null || echo 'not in PATH')"
+  echo "[DEBUG]: find gst-inspect-1.0: $(find /home/linuxbrew/.linuxbrew/ -iname gst-inspect-1.0 2>/dev/null | head -1 || echo 'not found')"
+  if [[ -d /home/linuxbrew/.linuxbrew/Cellar/gstreamer ]]; then
+    echo "[DEBUG]: find gstreamer bin: $(find /home/linuxbrew/.linuxbrew/Cellar/gstreamer -type d -name bin 2>/dev/null | head -1)"
+  else
+    echo "[DEBUG]: find gstreamer bin: directory not yet cached"
+  fi
+  echo "[DEBUG]: brew info gstreamer: $(brew info gstreamer 2>/dev/null || echo 'brew not available')"
+  
   # gst-inspect sanity (non-fatal warning if missing gst-inspect)
+  # Determine gst-inspect-1.0 path (Homebrew may not be in PATH)
+  # IMPORTANT: Use dynamic path finding instead of hardcoding versions
+  local gst_inspect_cmd=""
   if command -v gst-inspect-1.0 >/dev/null 2>&1; then
-    if gst-inspect-1.0 pre_record_loop >/dev/null 2>&1; then
-      echo "[CI] gst-inspect located plugin 'pre_record_loop'"
+    gst_inspect_cmd="gst-inspect-1.0"
+    echo "[DEBUG]: Found gst-inspect-1.0 in PATH: $gst_inspect_cmd"
+  # Fallback: search Cellar for any gst-inspect-1.0 (works with any version)
+  elif gst_inspect_path=$(find /home/linuxbrew/.linuxbrew/Cellar/gstreamer -name "gst-inspect-1.0" -type f 2>/dev/null | head -1); [ -n "$gst_inspect_path" ]; then
+    gst_inspect_cmd="$gst_inspect_path"
+    echo "[DEBUG]: Found gst-inspect-1.0 via Linux Cellar search: $gst_inspect_cmd"
+  elif gst_inspect_path=$(find /opt/homebrew/Cellar/gstreamer -name "gst-inspect-1.0" -type f 2>/dev/null | head -1); [ -n "$gst_inspect_path" ]; then
+    gst_inspect_cmd="$gst_inspect_path"
+    echo "[DEBUG]: Found gst-inspect-1.0 via macOS Cellar search: $gst_inspect_cmd"
+  else
+    echo "[DEBUG]: gst-inspect-1.0 not found anywhere"
+    gst_inspect_cmd=""
+  fi
+  
+  if [ -n "$gst_inspect_cmd" ]; then
+    # Add diagnostics before attempting gst-inspect
+    echo "[CI] Plugin directory: $plugin_dir"
+    if [[ -d "$plugin_dir" ]]; then
+      echo "[CI] Plugin directory contents:"
+      ls -lh "$plugin_dir" || true
+    else
+      echo "[CI][ERROR] Plugin directory does not exist" >&2
+      return 1
+    fi
+    
+    # Try to inspect the element
+    if "$gst_inspect_cmd" pre_record_loop >/dev/null 2>&1; then
+      echo "[CI] ✓ gst-inspect located element 'pre_record_loop'"
     else
       echo "[CI][ERROR] gst-inspect could not find 'pre_record_loop'" >&2
+      echo "[CI][DEBUG] GST_PLUGIN_PATH=$GST_PLUGIN_PATH"
+      echo "[CI][DEBUG] LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-<not set>}"
+      echo "[CI][DEBUG] Attempting direct plugin inspection:"
+      "$gst_inspect_cmd" prerecordloop 2>&1 | head -30 || true
+      echo "[CI][DEBUG] GStreamer debug output:"
+      GST_DEBUG=3 "$gst_inspect_cmd" pre_record_loop 2>&1 | head -30 || true
       return 1
     fi
   else
