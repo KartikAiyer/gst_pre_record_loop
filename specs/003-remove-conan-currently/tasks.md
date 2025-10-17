@@ -48,7 +48,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.1: Setup & Preparation
 **Goal**: Create new CMake preset infrastructure before removing Conan
 
-- [ ] **T001** [P] Create repository CMakePresets.json with debug and release presets
+- [x] **T001** [P] Create repository CMakePresets.json with debug and release presets
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/CMakePresets.json`
   - **Content**: Based on `contracts/CMakePresets.json.example` with:
     - Schema version 6 (CMake 3.27+)
@@ -59,7 +59,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
   - **Validation**: File exists, JSON is valid, preset names are lowercase
   - **Dependencies**: None (first task)
 
-- [ ] **T002** [P] Update .gitignore to exclude CMakeUserPresets.json
+- [x] **T002** [P] Update .gitignore to exclude CMakeUserPresets.json
   - **File**: `/Users/kartikaiyer/fun/gst_my_filter/.gitignore`
   - **Action**: Add line `CMakeUserPresets.json` (user-specific, not version-controlled)
   - **Rationale**: CMakeUserPresets.json is for local developer customization only
