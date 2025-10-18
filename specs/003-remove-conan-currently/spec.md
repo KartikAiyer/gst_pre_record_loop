@@ -2,7 +2,7 @@
 
 **Feature Branch**: `003-remove-conan-currently`  
 **Created**: 2025-10-17  
-**Status**: Draft  
+**Status**: Ready for Review  
 **Input**: User description: "Remove Conan. Currently I'm using conan but don't really have any dependencies. I'm using it to generate cmake preset files and a toolchain file. However it doesn't really seem that I need a toolchain file because it feels that the default options for a compiler on both the mac and linux should be sufficient. I would like to remove the use of conan and make sure that all build steps and test steps and ci work as expected after removing it."
 
 ## Execution Flow (main)

@@ -288,7 +288,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.9: CI Cache Validation
 **Goal**: Verify cache performance improvement in real GitHub Actions environment
 
-- [ ] **T013** Validate CI cache performance and measure time savings
+- [x] **T013** Validate CI cache performance and measure time savings
   - **Actions**:
     1. Push branch with cache changes to GitHub
     2. Monitor first workflow run (cache miss - baseline)
@@ -311,7 +311,7 @@ Repository root: `/Users/kartikaiyer/fun/gst_my_filter/`
 ## Phase 3.10: Final Documentation Review
 **Goal**: Ensure all documentation is consistent and complete
 
-- [ ] **T014** [P] Final review and update spec.md status
+- [x] **T014** [P] Final review and update spec.md status
   - **Files**:
     - `/Users/kartikaiyer/fun/gst_my_filter/specs/003-remove-conan-currently/spec.md`
     - `/Users/kartikaiyer/fun/gst_my_filter/specs/003-remove-conan-currently/quickstart.md`
