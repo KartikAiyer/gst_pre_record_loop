@@ -1,5 +1,7 @@
 # Introduction
 
+[![CI Build and Test](https://github.com/KartikAiyer/gst_pre_record_loop/actions/workflows/ci.yml/badge.svg)](https://github.com/KartikAiyer/gst_pre_record_loop/actions/workflows/ci.yml)
+
 **Status**: ✅ Production Ready (Baseline Spec Complete - October 11, 2025)
 
 This project implements a GStreamer plugin featuring a ring buffer filter for encoded video capture. The filter addresses a common requirement in event-driven recording applications: capturing video data that occurred before an event was detected.
