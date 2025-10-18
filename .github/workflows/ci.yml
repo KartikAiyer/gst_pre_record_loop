@@ -61,7 +61,9 @@ jobs:
           key: ${{ runner.os }}-linuxbrew-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: |
             ${{ runner.os }}-linuxbrew-
-        # DISABLED: Linux Homebrew caching has issues with library paths after restore
+        # NOTE: Linux Homebrew caching is intentionally disabled due to unresolved issues with LD_LIBRARY_PATH after cache restore.
+        # This is a known limitation (see TODO below). Caching will be re-enabled once LD_LIBRARY_PATH handling is fixed in run-tests.sh.
+        # This disables comprehensive CI caching on Linux for Homebrew packages, in contrast to macOS, until the issue is resolved.
         # TODO: Re-enable after fixing LD_LIBRARY_PATH handling in run-tests.sh
         if: false
 
