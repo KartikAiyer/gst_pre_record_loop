@@ -107,15 +107,17 @@ configure_build_test() {
     echo "[CI][WARN] Plugin directory not found at $plugin_dir"
   fi
 
-  echo "[DEBUG]: PATH=${PATH}"
-  echo "[DEBUG]: which gst-inspect-1.0: $(which gst-inspect-1.0 2>/dev/null || echo 'not in PATH')"
-  echo "[DEBUG]: find gst-inspect-1.0: $(find /home/linuxbrew/.linuxbrew/ -iname gst-inspect-1.0 2>/dev/null | head -1 || echo 'not found')"
-  if [[ -d /home/linuxbrew/.linuxbrew/Cellar/gstreamer ]]; then
-    echo "[DEBUG]: find gstreamer bin: $(find /home/linuxbrew/.linuxbrew/Cellar/gstreamer -type d -name bin 2>/dev/null | head -1)"
-  else
-    echo "[DEBUG]: find gstreamer bin: directory not yet cached"
+  if [[ -n "${CI_DEBUG:-}" ]]; then
+    echo "[DEBUG]: PATH=${PATH}"
+    echo "[DEBUG]: which gst-inspect-1.0: $(which gst-inspect-1.0 2>/dev/null || echo 'not in PATH')"
+    echo "[DEBUG]: find gst-inspect-1.0: $(find /home/linuxbrew/.linuxbrew/ -iname gst-inspect-1.0 2>/dev/null | head -1 || echo 'not found')"
+    if [[ -d /home/linuxbrew/.linuxbrew/Cellar/gstreamer ]]; then
+      echo "[DEBUG]: find gstreamer bin: $(find /home/linuxbrew/.linuxbrew/Cellar/gstreamer -type d -name bin 2>/dev/null | head -1)"
+    else
+      echo "[DEBUG]: find gstreamer bin: directory not yet cached"
+    fi
+    echo "[DEBUG]: brew info gstreamer: $(brew info gstreamer 2>/dev/null || echo 'brew not available')"
   fi
-  echo "[DEBUG]: brew info gstreamer: $(brew info gstreamer 2>/dev/null || echo 'brew not available')"
   
   # gst-inspect sanity (non-fatal warning if missing gst-inspect)
   # Determine gst-inspect-1.0 path (Homebrew may not be in PATH)
